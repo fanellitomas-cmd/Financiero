@@ -277,15 +277,16 @@ def _build_user_content(
 
 
 def _format_guardrail_feedback(feedback: GuardrailResult) -> str:
-    failed_checks = [
-        f"{finding.check_name}: {finding.detail}"
-        for finding in feedback.findings
-        if not finding.passed
-    ]
-    joined = "; ".join(failed_checks) if failed_checks else "sin detalle de fallos"
+    joined = (
+        "; ".join(feedback.flagged_issues)
+        if feedback.flagged_issues
+        else "sin detalle de fallos"
+    )
     return (
         "<guardrail_feedback>"
-        f"El intento anterior fue rechazado por el Guardrail. Corrige específicamente: {joined}. "
+        f"El intento anterior fue marcado inválido por el Guardrail "
+        f"(hallucination_score={feedback.hallucination_score:.2f}). "
+        f"Corrige específicamente: {joined}. "
         "Usa únicamente evidencia verificable citada en <research_dossier>."
         "</guardrail_feedback>"
     )

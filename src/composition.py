@@ -23,6 +23,7 @@ from src.ingestion.fmp_client import FMPClient
 from src.ingestion.gemini_client import GeminiClient
 from src.ingestion.polygon_client import PolygonClient
 from src.ingestion.tavily_client import TavilyClient
+from src.processing.guardrail_auditor import HeuristicGuardrailAuditor
 from src.processing.scenario_evaluator import GeminiScenarioEvaluator
 
 
@@ -47,16 +48,18 @@ def build_ingestion_backed_dependencies(
     *,
     gemini_client: GeminiClient | None = None,
     scenario_evaluator: ScenarioEvaluator | None = None,
-    guardrail: GuardrailAuditor,
+    guardrail: GuardrailAuditor | None = None,
     notifier: NotificationDispatcher,
 ) -> RuntimeGraphDependencies:
     """Conecta los clientes HTTP ya inicializados a los puertos `market_data` (Nodo 1),
-    `deep_research` (Nodo 2) y `scenario_evaluator` (Nodo 3, Gemini).
+    `deep_research` (Nodo 2), `scenario_evaluator` (Nodo 3, Gemini) y `guardrail` (Nodo 4).
 
     `scenario_evaluator` puede pasarse explícito (ej. un doble de prueba) o construirse
-    automáticamente a partir de `gemini_client`; se requiere exactamente uno de los dos. Los
-    puertos de los Nodos 4/5 todavía no tienen implementación de producción — el llamador
-    debe proveerlos explícitamente; esta función nunca los rellena con un stub silencioso.
+    automáticamente a partir de `gemini_client`; se requiere exactamente uno de los dos.
+    `guardrail` por defecto usa `HeuristicGuardrailAuditor` (sin dependencias externas), pero
+    puede reemplazarse (ej. por un doble de prueba). El puerto del Nodo 5 todavía no tiene
+    implementación de producción — el llamador debe proveerlo explícitamente; esta función
+    nunca lo rellena con un stub silencioso.
     """
 
     if scenario_evaluator is None:
@@ -66,6 +69,9 @@ def build_ingestion_backed_dependencies(
                 "gemini_client (para construir GeminiScenarioEvaluator automáticamente)."
             )
         scenario_evaluator = GeminiScenarioEvaluator(gemini_client)
+
+    if guardrail is None:
+        guardrail = HeuristicGuardrailAuditor()
 
     return RuntimeGraphDependencies(
         market_data=PolygonMarketDataAdapter(polygon_client),

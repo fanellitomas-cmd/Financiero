@@ -32,22 +32,13 @@ from src.ingestion.tavily_client import TavilyClient
 from src.validation.domain_models import (
     AssetClass,
     AssetProjection,
-    GuardrailResult,
     MarketAlert,
     NotificationPayload,
-    ResearchDossier,
     UserProfile,
     WatchedAsset,
 )
 
 logger = logging.getLogger(__name__)
-
-
-class _NotImplementedGuardrailAuditor:
-    async def audit(
-        self, projection: AssetProjection, dossier: ResearchDossier
-    ) -> GuardrailResult:
-        raise NotImplementedError("Nodo 4 (GuardrailAuditor) aún no implementado")
 
 
 class _NotImplementedNotificationDispatcher:
@@ -306,7 +297,6 @@ async def main() -> None:
         fmp,
         tavily,
         gemini_client=gemini,
-        guardrail=_NotImplementedGuardrailAuditor(),
         notifier=_NotImplementedNotificationDispatcher(),
     )
 
@@ -354,6 +344,16 @@ async def main() -> None:
                     f"[confianza={horizon.confidence_level}, "
                     f"completitud={horizon.data_completeness_pct}%]"
                 )
+
+            guardrail_result = await deps.guardrail.audit(projection, dossier, alert)
+            print(
+                f"Guardrail: is_valid={guardrail_result.is_valid} "
+                f"recommended_action={guardrail_result.recommended_action.value} "
+                f"hallucination_score={guardrail_result.hallucination_score:.2f}"
+            )
+            if guardrail_result.flagged_issues:
+                for issue in guardrail_result.flagged_issues:
+                    print(f"  - {issue}")
             print()
     finally:
         await polygon.aclose()

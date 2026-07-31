@@ -5,9 +5,10 @@ completa de cada nodo y `.cursorrules` §3 para las reglas de frontera entre cap
                       --[notify]---------------------------------------------------> notify
                       --[end_no_alert]----------------------------------------------> END
 
-    guardrail_audit --[approved]--> notify
-                    --[retry]-----> score_scenarios   (reintento acotado, hasta max_guardrail_retries)
-                    --[abort]-----> notify             (degradado a solo-datos-crudos)
+    guardrail_audit --[approved]--> notify   (recommended_action == PASS)
+                    --[retry]-----> deep_research   (RE_RUN_RESEARCH, acotado a max_guardrail_retries)
+                    --[abort]-----> notify   (ABORT: contradicción estructural o reintentos agotados;
+                                               degradado a solo-datos-crudos)
 
 `build_graph` no importa clientes concretos de `ingestion/`/`notification/`: recibe un
 `GraphDependencies` ya construido por el llamador (composition root), manteniendo `processing/`
@@ -74,7 +75,7 @@ def build_graph(
         make_route_after_guardrail(settings.max_guardrail_retries),
         {
             "approved": NOTIFY,
-            "retry": SCORE_SCENARIOS,
+            "retry": DEEP_RESEARCH,
             "abort": NOTIFY,
         },
     )

@@ -1,8 +1,9 @@
 """Nodo 3 — Evaluador de Escenarios: probabilidades por horizonte (Spec.md §3.3, §4.1).
 
-También es el punto de reintento cuando el Guardrail (Nodo 4) rechaza la proyección: en ese
-caso `guardrail_result` llega con verdict=REJECTED y este nodo re-evalúa pasándole ese feedback
-al `ScenarioEvaluator` para que acote el contexto a evidencia ya verificada (Spec.md §3.4).
+Cuando llega aquí tras un reintento (el Guardrail recomendó `RE_RUN_RESEARCH` y el Nodo 2 ya
+regeneró el dossier), recibe `state.guardrail_result` como `guardrail_feedback` para que el
+`ScenarioEvaluator` acote su razonamiento a evidencia ya verificada (Spec.md §3.4). El conteo
+de reintentos vive en el Nodo 2 (punto real de reentrada del ciclo), no aquí.
 """
 
 from __future__ import annotations
@@ -12,7 +13,6 @@ from typing import Any
 from src.core.dependencies import GraphDependencies
 from src.core.exceptions import InsufficientMarketDataError
 from src.core.state import AgentState, NodeFn
-from src.validation.domain_models import GuardrailVerdict
 
 
 def make_score_scenarios_node(deps: GraphDependencies) -> NodeFn:
@@ -22,14 +22,6 @@ def make_score_scenarios_node(deps: GraphDependencies) -> NodeFn:
                 "score_scenarios_node requiere MarketAlert y ResearchDossier ya presentes en el estado."
             )
 
-        is_retry = (
-            state.guardrail_result is not None
-            and state.guardrail_result.verdict == GuardrailVerdict.REJECTED
-        )
-        retry_count = (
-            state.guardrail_retry_count + 1 if is_retry else state.guardrail_retry_count
-        )
-
         projection = await deps.scenario_evaluator.evaluate(
             asset=state.watched_asset,
             alert=state.market_alert,
@@ -37,6 +29,6 @@ def make_score_scenarios_node(deps: GraphDependencies) -> NodeFn:
             guardrail_feedback=state.guardrail_result,
         )
 
-        return {"asset_projection": projection, "guardrail_retry_count": retry_count}
+        return {"asset_projection": projection}
 
     return score_scenarios_node

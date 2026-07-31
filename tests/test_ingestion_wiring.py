@@ -41,7 +41,7 @@ class _UnusedScenarioEvaluator:
 
 class _UnusedGuardrailAuditor:
     async def audit(
-        self, projection: AssetProjection, dossier: ResearchDossier
+        self, projection: AssetProjection, dossier: ResearchDossier, alert: MarketAlert
     ) -> GuardrailResult:
         raise AssertionError("no debería invocarse en este test de wiring")
 

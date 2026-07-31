@@ -10,7 +10,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class AssetClass(str, Enum):
@@ -169,33 +169,39 @@ class AssetProjection(BaseModel):
     classification_confidence_pct: Decimal = Field(ge=0, le=100)
 
 
-class GuardrailVerdict(str, Enum):
-    APPROVED = "APPROVED"
-    REJECTED = "REJECTED"
-
-
-class GuardrailFinding(BaseModel):
-    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
-
-    check_name: Literal[
-        "GROUNDING_CHECK",
-        "NUMERIC_CONSISTENCY",
-        "SOURCE_WHITELIST",
-        "RECENCY_CHECK",
-        "MAGNITUDE_SANITY",
-    ]
-    passed: bool
-    detail: str
+class GuardrailAction(str, Enum):
+    PASS = "PASS"
+    RE_RUN_RESEARCH = "RE-RUN_RESEARCH"
+    ABORT = "ABORT"
 
 
 class GuardrailResult(BaseModel):
-    """Salida del Nodo 4. Ver Spec.md §3.4 para el detalle de cada check."""
+    """Salida del Nodo 4 (Spec.md §3.4): auditoría de alucinaciones sobre un `AssetProjection`
+    antes de que llegue al Nodo 5. `is_valid`/`flagged_issues`/`recommended_action` deben ser
+    mutuamente consistentes — se valida al construir el objeto, nunca se confía en que el
+    llamador los arme bien a mano.
+    """
 
     model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
 
-    verdict: GuardrailVerdict
-    findings: list[GuardrailFinding]
+    is_valid: bool
+    hallucination_score: float = Field(ge=0.0, le=1.0)
+    flagged_issues: list[str] = Field(default_factory=list)
+    recommended_action: GuardrailAction
     evaluated_at: datetime
+
+    @model_validator(mode="after")
+    def _check_internal_consistency(self) -> GuardrailResult:
+        if self.is_valid and self.flagged_issues:
+            raise ValueError(
+                "GuardrailResult inconsistente: is_valid=True con flagged_issues no vacío."
+            )
+        if self.is_valid != (self.recommended_action == GuardrailAction.PASS):
+            raise ValueError(
+                "GuardrailResult inconsistente: is_valid debe coincidir con "
+                "recommended_action == PASS."
+            )
+        return self
 
 
 class NotificationPayload(BaseModel):

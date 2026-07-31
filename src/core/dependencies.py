@@ -47,10 +47,13 @@ class ScenarioEvaluator(Protocol):
 
 
 class GuardrailAuditor(Protocol):
-    """Nodo 4: auditoría de alucinaciones (Spec.md §3.4)."""
+    """Nodo 4: auditoría de alucinaciones (Spec.md §3.4). Recibe la `MarketAlert` además de la
+    proyección y el dossier porque sus valores numéricos (`trigger_value`,
+    `threshold_breached`) son parte del contexto verificado contra el que se audita.
+    """
 
     async def audit(
-        self, projection: AssetProjection, dossier: ResearchDossier
+        self, projection: AssetProjection, dossier: ResearchDossier, alert: MarketAlert
     ) -> GuardrailResult: ...
 
 
