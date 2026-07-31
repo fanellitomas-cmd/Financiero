@@ -11,7 +11,7 @@ from src.validation.domain_models import (
     AssetProjection,
     GuardrailResult,
     MarketAlert,
-    NotificationPayload,
+    PushNotificationPayload,
     ResearchDossier,
     UserProfile,
     WatchedAsset,
@@ -58,7 +58,9 @@ class GuardrailAuditor(Protocol):
 
 
 class NotificationDispatcher(Protocol):
-    """Nodo 5: formateo por perfil + envío a Telegram/Discord (Spec.md §3.5)."""
+    """Nodo 5: arma el payload de push nativo estructurado y lo despacha hacia el backend
+    propio y/o FCM — sin terceros tipo Telegram/Discord (Spec.md §3.5).
+    """
 
     async def render_and_send(
         self,
@@ -67,7 +69,7 @@ class NotificationDispatcher(Protocol):
         alert: MarketAlert | None,
         projection: AssetProjection | None,
         degraded_raw_data_only: bool,
-    ) -> NotificationPayload: ...
+    ) -> PushNotificationPayload: ...
 
 
 class GraphDependencies(Protocol):

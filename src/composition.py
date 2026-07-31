@@ -23,9 +23,9 @@ from src.ingestion.fmp_client import FMPClient
 from src.ingestion.gemini_client import GeminiClient
 from src.ingestion.polygon_client import PolygonClient
 from src.ingestion.tavily_client import TavilyClient
-from src.notification.discord_client import DiscordClient
-from src.notification.dispatcher import ChannelNotificationDispatcher
-from src.notification.telegram_client import TelegramClient
+from src.notification.dispatcher import NativePushDispatcher
+from src.notification.fcm_client import FCMClient
+from src.notification.internal_backend_client import InternalBackendClient
 from src.processing.guardrail_auditor import HeuristicGuardrailAuditor
 from src.processing.scenario_evaluator import GeminiScenarioEvaluator
 
@@ -53,9 +53,8 @@ def build_ingestion_backed_dependencies(
     scenario_evaluator: ScenarioEvaluator | None = None,
     guardrail: GuardrailAuditor | None = None,
     notifier: NotificationDispatcher | None = None,
-    telegram_client: TelegramClient | None = None,
-    telegram_chat_id: str | None = None,
-    discord_client: DiscordClient | None = None,
+    internal_backend_client: InternalBackendClient | None = None,
+    fcm_client: FCMClient | None = None,
 ) -> RuntimeGraphDependencies:
     """Conecta los clientes HTTP ya inicializados a los cinco puertos del grafo.
 
@@ -63,8 +62,9 @@ def build_ingestion_backed_dependencies(
     automáticamente a partir de `gemini_client`; se requiere exactamente uno de los dos.
     `guardrail` por defecto usa `HeuristicGuardrailAuditor` (sin dependencias externas).
     `notifier` puede pasarse explícito o construirse automáticamente a partir de
-    `telegram_client`/`discord_client` (al menos uno configurado; `ChannelNotificationDispatcher`
-    intenta Telegram primero y cae a Discord si falla o no está configurado).
+    `internal_backend_client`/`fcm_client` (al menos uno configurado; `NativePushDispatcher`
+    registra en el backend propio y además publica en FCM si está configurado — sin Telegram
+    ni Discord).
     """
 
     if scenario_evaluator is None:
@@ -79,10 +79,8 @@ def build_ingestion_backed_dependencies(
         guardrail = HeuristicGuardrailAuditor()
 
     if notifier is None:
-        notifier = ChannelNotificationDispatcher(
-            telegram_client=telegram_client,
-            telegram_chat_id=telegram_chat_id,
-            discord_client=discord_client,
+        notifier = NativePushDispatcher(
+            internal_backend_client=internal_backend_client, fcm_client=fcm_client
         )
 
     return RuntimeGraphDependencies(

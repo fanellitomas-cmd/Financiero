@@ -28,11 +28,15 @@ class Settings(BaseSettings):
     gemini_temperature: float = 0.2
     gemini_timeout_seconds: float = 30.0
 
-    telegram_bot_token: SecretStr | None = None
-    telegram_chat_id: str | None = None
-    telegram_base_url: str = "https://api.telegram.org"
+    internal_backend_base_url: str = "http://localhost:8000"
+    internal_backend_api_key: SecretStr | None = None
+    internal_backend_dispatch_path: str = "/api/v1/internal/alerts/dispatch"
 
-    discord_webhook_url: SecretStr | None = None
+    fcm_project_id: str | None = None
+    fcm_access_token: SecretStr | None = None
+    fcm_topic_template: str = "alerts_{ticker}"
+
+    app_deep_link_template: str = "financiero://asset/{ticker}"
 
 
 settings = Settings()

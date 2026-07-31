@@ -1,57 +1,51 @@
-"""Nodo 5 — Generador de Salida (Spec.md §3.5). Implementa `NotificationDispatcher`: formatea
-con `message_templates` y despacha con el primer canal configurado que funcione (Telegram,
-luego Discord). No decide ni calcula nada — solo conoce el resultado final ya auditado por el
-Guardrail (.cursorrules §3).
+"""Nodo 5 — Generador de Salida nativo (Spec.md §3.5). Implementa `NotificationDispatcher`:
+arma el `PushNotificationPayload` con `payload_builder` y lo despacha hacia el backend propio
+y/o FCM. Sin terceros (Telegram/Discord) — la app consume sus propias notificaciones.
 """
 
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
 
-from src.notification.discord_client import DiscordClient
-from src.notification.message_templates import (
-    render_discord_message,
-    render_telegram_message,
-)
-from src.notification.telegram_client import TelegramClient
+from src.notification.fcm_client import FCMClient
+from src.notification.internal_backend_client import InternalBackendClient
+from src.notification.payload_builder import build_push_payload
 from src.validation.domain_models import (
     AssetProjection,
     DataStatus,
     MarketAlert,
-    NotificationChannel,
-    NotificationPayload,
+    PushNotificationPayload,
     UserProfile,
     WatchedAsset,
 )
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_ACTION_URL_TEMPLATE = "financiero://asset/{ticker}"
+_DEFAULT_FCM_TOPIC_TEMPLATE = "alerts_{ticker}"
 
-class ChannelNotificationDispatcher:
+
+class NativePushDispatcher:
     def __init__(
         self,
         *,
-        telegram_client: TelegramClient | None = None,
-        telegram_chat_id: str | None = None,
-        discord_client: DiscordClient | None = None,
+        internal_backend_client: InternalBackendClient | None = None,
+        fcm_client: FCMClient | None = None,
+        fcm_topic_template: str = _DEFAULT_FCM_TOPIC_TEMPLATE,
+        action_url_template: str = _DEFAULT_ACTION_URL_TEMPLATE,
     ) -> None:
-        if telegram_client is not None and telegram_chat_id is None:
-            raise ValueError(
-                "telegram_chat_id es requerido si se provee telegram_client."
-            )
-
-        self._telegram_client = telegram_client
-        self._telegram_chat_id = telegram_chat_id
-        self._discord_client = discord_client
-
-        if telegram_client is None and discord_client is None:
+        if internal_backend_client is None and fcm_client is None:
             logger.warning(
                 "notification_dispatcher_no_channels_configured",
                 extra={
-                    "hint": "ningún canal (Telegram/Discord) configurado; nunca se enviará nada"
+                    "hint": "ni backend propio ni FCM configurados; nunca se despachará nada"
                 },
             )
+
+        self._backend = internal_backend_client
+        self._fcm = fcm_client
+        self._fcm_topic_template = fcm_topic_template
+        self._action_url_template = action_url_template
 
     async def render_and_send(
         self,
@@ -60,67 +54,46 @@ class ChannelNotificationDispatcher:
         alert: MarketAlert | None,
         projection: AssetProjection | None,
         degraded_raw_data_only: bool,
-    ) -> NotificationPayload:
-        telegram_text = render_telegram_message(
+    ) -> PushNotificationPayload:
+        payload = build_push_payload(
             asset=asset,
             user_profile=user_profile,
             alert=alert,
             projection=projection,
             degraded_raw_data_only=degraded_raw_data_only,
+            action_url_template=self._action_url_template,
         )
 
-        sent_at = datetime.now(timezone.utc)
-        notification_sent = False
-        message_id: str | None = None
-        channel: NotificationChannel | None = None
+        alert_db_id: str | None = None
+        push_dispatched = False
 
-        if self._telegram_client is not None and self._telegram_chat_id is not None:
-            telegram_result = await self._telegram_client.send_message(
-                self._telegram_chat_id, telegram_text
-            )
-            if telegram_result.status == DataStatus.OK:
-                notification_sent = True
-                message_id = telegram_result.message_id
-                channel = NotificationChannel.TELEGRAM
-                sent_at = telegram_result.sent_at
+        if self._backend is not None:
+            backend_result = await self._backend.dispatch_alert(payload)
+            if backend_result.status == DataStatus.OK:
+                alert_db_id = backend_result.alert_id
+                push_dispatched = True
             else:
                 logger.warning(
-                    "telegram_dispatch_failed", extra={"ticker": asset.ticker}
+                    "internal_backend_dispatch_failed", extra={"ticker": asset.ticker}
                 )
 
-        if not notification_sent and self._discord_client is not None:
-            discord_text = render_discord_message(
-                asset=asset,
-                user_profile=user_profile,
-                alert=alert,
-                projection=projection,
-                degraded_raw_data_only=degraded_raw_data_only,
-            )
-            discord_result = await self._discord_client.send_message(discord_text)
-            if discord_result.status == DataStatus.OK:
-                notification_sent = True
-                message_id = discord_result.message_id
-                channel = NotificationChannel.DISCORD
-                sent_at = discord_result.sent_at
+        if self._fcm is not None:
+            topic = self._fcm_topic_template.format(ticker=asset.ticker)
+            fcm_result = await self._fcm.send_to_topic(topic, payload)
+            if fcm_result.status == DataStatus.OK:
+                push_dispatched = True
             else:
                 logger.warning(
-                    "discord_dispatch_failed", extra={"ticker": asset.ticker}
+                    "fcm_dispatch_failed",
+                    extra={"ticker": asset.ticker, "topic": topic},
                 )
 
-        if not notification_sent:
+        if not push_dispatched:
             logger.error(
                 "notification_dispatch_failed_all_channels",
                 extra={"ticker": asset.ticker},
             )
 
-        return NotificationPayload(
-            ticker=asset.ticker,
-            user_profile=user_profile,
-            degraded_raw_data_only=degraded_raw_data_only,
-            rendered_text=telegram_text,
-            asset_projection=projection,
-            notification_sent=notification_sent,
-            sent_at=sent_at,
-            message_id=message_id,
-            channel=channel,
+        return payload.model_copy(
+            update={"push_dispatched": push_dispatched, "alert_db_id": alert_db_id}
         )

@@ -5,11 +5,12 @@ Uso:
 
     python -m scripts.smoke_test_wiring
 
-Si `POLYGON_API_KEY`, `FMP_API_KEY`, `TAVILY_API_KEY`, `GEMINI_API_KEY` y
-`TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` están configuradas (ver `.env` / `core/config.py`),
-llama a las APIs reales. Si falta alguna, usa un `httpx.MockTransport` determinístico para
-validar el wiring completo sin credenciales — útil en CI o en un sandbox sin acceso de red a
-los proveedores.
+Si `POLYGON_API_KEY`, `FMP_API_KEY`, `TAVILY_API_KEY`, `GEMINI_API_KEY` y las credenciales del
+backend propio (`INTERNAL_BACKEND_BASE_URL` + opcionalmente `INTERNAL_BACKEND_API_KEY`) están
+configuradas (ver `.env` / `core/config.py`), llama a las APIs reales. Si falta alguna, usa un
+`httpx.MockTransport` determinístico para validar el wiring completo sin credenciales — útil
+en CI o en un sandbox sin acceso de red a los proveedores. No hay Telegram/Discord: el Nodo 5
+despacha hacia el backend propio (y opcionalmente FCM).
 """
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ from src.ingestion.fmp_client import FMPClient
 from src.ingestion.gemini_client import GeminiClient
 from src.ingestion.polygon_client import PolygonClient
 from src.ingestion.tavily_client import TavilyClient
-from src.notification.telegram_client import TelegramClient
+from src.notification.internal_backend_client import InternalBackendClient
 from src.processing.graph import build_graph
 from src.validation.domain_models import AssetClass, UserProfile, WatchedAsset
 
@@ -168,20 +169,18 @@ def _mock_gemini_handler(request: httpx.Request) -> httpx.Response:
     )
 
 
-def _mock_telegram_handler(request: httpx.Request) -> httpx.Response:
-    return httpx.Response(200, json={"ok": True, "result": {"message_id": 1001}})
+def _mock_internal_backend_handler(request: httpx.Request) -> httpx.Response:
+    return httpx.Response(200, json={"alert_id": "db-mock-001"})
 
 
 def _build_clients() -> tuple[
-    PolygonClient, FMPClient, TavilyClient, GeminiClient, TelegramClient, str, bool
+    PolygonClient, FMPClient, TavilyClient, GeminiClient, InternalBackendClient, bool
 ]:
     if (
         settings.polygon_api_key
         and settings.fmp_api_key
         and settings.tavily_api_key
         and settings.gemini_api_key
-        and settings.telegram_bot_token
-        and settings.telegram_chat_id
     ):
         polygon = PolygonClient(
             settings.polygon_api_key.get_secret_value(),
@@ -199,18 +198,23 @@ def _build_clients() -> tuple[
             base_url=settings.gemini_base_url,
             model=settings.gemini_model,
         )
-        telegram = TelegramClient(
-            settings.telegram_bot_token.get_secret_value(),
-            base_url=settings.telegram_base_url,
+        backend = InternalBackendClient(
+            settings.internal_backend_base_url,
+            dispatch_path=settings.internal_backend_dispatch_path,
+            api_key=(
+                settings.internal_backend_api_key.get_secret_value()
+                if settings.internal_backend_api_key
+                else None
+            ),
         )
-        return polygon, fmp, tavily, gemini, telegram, settings.telegram_chat_id, True
+        return polygon, fmp, tavily, gemini, backend, True
 
     logger.warning(
         "no_real_api_keys_configured_using_mock_transport",
         extra={
             "hint": (
-                "definí POLYGON_API_KEY/FMP_API_KEY/TAVILY_API_KEY/GEMINI_API_KEY/"
-                "TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID para probar contra red real"
+                "definí POLYGON_API_KEY/FMP_API_KEY/TAVILY_API_KEY/GEMINI_API_KEY "
+                "para probar contra red real"
             )
         },
     )
@@ -242,29 +246,22 @@ def _build_clients() -> tuple[
             base_url="https://generativelanguage.googleapis.com/v1beta",
         ),
     )
-    telegram = TelegramClient(
-        "mock-token",
+    backend = InternalBackendClient(
+        "https://backend.internal",
         http_client=httpx.AsyncClient(
-            transport=httpx.MockTransport(_mock_telegram_handler),
-            base_url="https://api.telegram.org",
+            transport=httpx.MockTransport(_mock_internal_backend_handler),
+            base_url="https://backend.internal",
         ),
     )
-    return polygon, fmp, tavily, gemini, telegram, "mock-chat-id", False
+    return polygon, fmp, tavily, gemini, backend, False
 
 
 async def main() -> None:
     logging.basicConfig(level=logging.INFO)
-    polygon, fmp, tavily, gemini, telegram, telegram_chat_id, using_real_network = (
-        _build_clients()
-    )
+    polygon, fmp, tavily, gemini, backend, using_real_network = _build_clients()
 
     deps = build_ingestion_backed_dependencies(
-        polygon,
-        fmp,
-        tavily,
-        gemini_client=gemini,
-        telegram_client=telegram,
-        telegram_chat_id=telegram_chat_id,
+        polygon, fmp, tavily, gemini_client=gemini, internal_backend_client=backend
     )
     graph = build_graph(deps)
 
@@ -288,20 +285,28 @@ async def main() -> None:
                 continue
 
             print(
-                f"notification_sent={payload.notification_sent} "
-                f"channel={payload.channel.value if payload.channel else None} "
-                f"message_id={payload.message_id} "
+                f"push_dispatched={payload.push_dispatched} "
+                f"alert_db_id={payload.alert_db_id} "
+                f"urgency_level={payload.urgency_level.value} "
+                f"default_view={payload.default_view} "
                 f"degraded_raw_data_only={payload.degraded_raw_data_only}"
             )
-            print("--- mensaje renderizado ---")
-            print(payload.rendered_text)
+            print(f"title: {payload.title}")
+            print(f"short_summary: {payload.short_summary}")
+            print(f"action_url: {payload.action_url}")
+            print(f"technical_narrative: {payload.technical_narrative.headline}")
+            for line in payload.technical_narrative.horizon_explanations:
+                print(f"  - {line}")
+            print(f"beginner_narrative: {payload.beginner_narrative.headline}")
+            for line in payload.beginner_narrative.horizon_explanations:
+                print(f"  - {line}")
             print()
     finally:
         await polygon.aclose()
         await fmp.aclose()
         await tavily.aclose()
         await gemini.aclose()
-        await telegram.aclose()
+        await backend.aclose()
 
 
 if __name__ == "__main__":

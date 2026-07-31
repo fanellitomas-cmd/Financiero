@@ -21,7 +21,7 @@ from src.validation.domain_models import (
     AssetProjection,
     GuardrailResult,
     MarketAlert,
-    NotificationPayload,
+    PushNotificationPayload,
     ResearchDossier,
     UserProfile,
     WatchedAsset,
@@ -54,7 +54,7 @@ class _UnusedNotificationDispatcher:
         alert: MarketAlert | None,
         projection: AssetProjection | None,
         degraded_raw_data_only: bool,
-    ) -> NotificationPayload:
+    ) -> PushNotificationPayload:
         raise AssertionError("no debería invocarse en este test de wiring")
 
 

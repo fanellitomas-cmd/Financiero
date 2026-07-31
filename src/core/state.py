@@ -13,7 +13,7 @@ from src.validation.domain_models import (
     AssetProjection,
     GuardrailResult,
     MarketAlert,
-    NotificationPayload,
+    PushNotificationPayload,
     ResearchDossier,
     UserProfile,
     WatchedAsset,
@@ -30,7 +30,7 @@ class AgentState(BaseModel):
     research_dossier: ResearchDossier | None = None
     asset_projection: AssetProjection | None = None
     guardrail_result: GuardrailResult | None = None
-    notification_payload: NotificationPayload | None = None
+    notification_payload: PushNotificationPayload | None = None
 
     guardrail_retry_count: int = 0
     error_log: list[str] = Field(default_factory=list)

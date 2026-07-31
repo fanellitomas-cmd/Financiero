@@ -204,25 +204,40 @@ class GuardrailResult(BaseModel):
         return self
 
 
-class NotificationChannel(str, Enum):
-    TELEGRAM = "TELEGRAM"
-    DISCORD = "DISCORD"
-
-
-class NotificationPayload(BaseModel):
-    """Salida del Nodo 5 (Spec.md §3.5): resultado final del despacho, incluyendo si realmente
-    se envió, por qué canal, y el ID del mensaje para poder rastrearlo o editarlo después.
+class AnalysisNarrative(BaseModel):
+    """Una de las dos versiones (técnica o principiante) del análisis narrativo, para que la
+    app decida cuál mostrar según la preferencia del usuario sin necesitar un nuevo push
+    (Spec.md §4.2: el toggle "Explicar para Principiantes" es una decisión del cliente).
     """
 
     model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
 
-    ticker: str
-    user_profile: UserProfile
-    degraded_raw_data_only: bool = False
-    rendered_text: str
-    asset_projection: AssetProjection | None = None
+    headline: str
+    horizon_explanations: list[str] = Field(default_factory=list)
 
-    notification_sent: bool
-    sent_at: datetime
-    message_id: str | None = None
-    channel: NotificationChannel | None = None
+
+class PushNotificationPayload(BaseModel):
+    """Salida del Nodo 5 (Spec.md §3.5): payload JSON estructurado para notificación push
+    nativa + registro en el backend propio — ya no un texto de chat para un tercero. Incluye
+    ambas narrativas (técnica y accesible) siempre, y el estado real de entrega
+    (`push_dispatched`, `alert_db_id`) se completa después de despachar.
+    """
+
+    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
+
+    notification_id: str
+    ticker: str
+    asset_type: Literal["stock", "crypto"]
+    title: str
+    short_summary: str
+    full_analysis_json: AssetProjection | None = None
+    technical_narrative: AnalysisNarrative
+    beginner_narrative: AnalysisNarrative
+    default_view: Literal["technical", "beginner"]
+    urgency_level: AlertSeverity
+    action_url: str
+    timestamp: datetime
+
+    degraded_raw_data_only: bool = False
+    push_dispatched: bool
+    alert_db_id: str | None = None
