@@ -33,5 +33,23 @@ class WatchlistRepository {
     return WatchlistItem.fromJson(response.data as Map<String, dynamic>);
   }
 
+  /// `PATCH /api/v1/watchlist/{id}` — parcial: solo se envían los campos que cambiaron, no
+  /// hace falta reenviar `ticker`/`asset_type` (esos son inmutables una vez creado el item).
+  Future<WatchlistItem> update(
+    String itemId, {
+    double? alertThresholdPct,
+    bool? enableBeginnerMode,
+  }) async {
+    final response = await _apiClient.dio.patch(
+      '/watchlist/$itemId',
+      data: {
+        if (alertThresholdPct != null)
+          'alert_threshold_pct': alertThresholdPct.toString(),
+        if (enableBeginnerMode != null) 'enable_beginner_mode': enableBeginnerMode,
+      },
+    );
+    return WatchlistItem.fromJson(response.data as Map<String, dynamic>);
+  }
+
   Future<void> remove(String itemId) => _apiClient.dio.delete('/watchlist/$itemId');
 }

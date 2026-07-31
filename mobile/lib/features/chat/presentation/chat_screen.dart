@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/api_error.dart';
 import '../../../core/providers.dart';
+import '../../watchlist/presentation/watchlist_controller.dart';
 import '../data/chat_repository.dart';
 
-/// Pantalla 2: Buscador Conversacional / Chat con el Agente. La UI está completa y wireada al
-/// `ChatRepository`; lo único que falta es el endpoint conversacional del lado del backend
-/// (ver TODO en `chat_repository.dart`) — cuando exista, el único cambio acá es que
-/// `_send` deja de mostrar el mensaje de error y empieza a mostrar la respuesta real.
+/// Pantalla 2: Buscador Conversacional / Chat con el Agente. Wireada a `POST /api/v1/chat`
+/// (`ChatRepository.send`) — el selector de ticker es opcional y le pasa al backend contexto
+/// de `AlertHistory` reciente para esa pregunta (ver `app/services/chat_service.py`).
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
 
@@ -18,6 +19,7 @@ class ChatScreen extends ConsumerStatefulWidget {
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _inputController = TextEditingController();
   final _messages = <ChatMessage>[];
+  String? _selectedTicker;
   bool _isSending = false;
 
   @override
@@ -37,16 +39,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     });
 
     try {
-      final reply = await ref.read(chatRepositoryProvider).send(text);
-      setState(() => _messages.add(reply));
-    } on Object {
+      final response = await ref
+          .read(chatRepositoryProvider)
+          .send(text, ticker: _selectedTicker);
+      final suffix = response.groundedInRecentAlert
+          ? ''
+          : (response.referencedTicker != null
+              ? '\n\n(sin un análisis reciente guardado de ${response.referencedTicker})'
+              : '');
       setState(
-        () => _messages.add(
-          const ChatMessage(
-            text: 'El chat conversacional todavía no está disponible en el backend.',
-            isFromUser: false,
-          ),
-        ),
+        () => _messages.add(ChatMessage(text: '${response.reply}$suffix', isFromUser: false)),
+      );
+    } on Object catch (error) {
+      setState(
+        () => _messages.add(ChatMessage(text: describeApiError(error), isFromUser: false)),
       );
     } finally {
       setState(() => _isSending = false);
@@ -55,8 +61,47 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final watchlistAsync = ref.watch(watchlistProvider);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Preguntale al agente')),
+      appBar: AppBar(
+        title: const Text('Preguntale al agente'),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: watchlistAsync.when(
+              data: (items) => Row(
+                children: [
+                  const Text('Sobre: '),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: DropdownButton<String?>(
+                      isExpanded: true,
+                      value: _selectedTicker,
+                      hint: const Text('Ningún ticker (pregunta general)'),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('Ningún ticker'),
+                        ),
+                        for (final item in items)
+                          DropdownMenuItem<String?>(
+                            value: item.ticker,
+                            child: Text(item.ticker),
+                          ),
+                      ],
+                      onChanged: (value) => setState(() => _selectedTicker = value),
+                    ),
+                  ),
+                ],
+              ),
+              loading: () => const SizedBox.shrink(),
+              error: (error, stackTrace) => const SizedBox.shrink(),
+            ),
+          ),
+        ),
+      ),
       body: Column(
         children: [
           Expanded(
@@ -95,10 +140,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  IconButton.filled(
-                    onPressed: _isSending ? null : _send,
-                    icon: const Icon(Icons.send),
-                  ),
+                  _isSending
+                      ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : IconButton.filled(onPressed: _send, icon: const Icon(Icons.send)),
                 ],
               ),
             ),

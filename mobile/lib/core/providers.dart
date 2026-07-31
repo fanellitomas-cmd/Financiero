@@ -1,8 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../features/alerts/data/alerts_repository.dart';
+import '../features/asset_detail/data/asset_repository.dart';
 import '../features/auth/data/auth_repository.dart';
 import '../features/auth/presentation/auth_controller.dart';
 import '../features/chat/data/chat_repository.dart';
+import '../features/dashboard/data/market_data_repository.dart';
 import '../features/watchlist/data/watchlist_repository.dart';
 import 'config/app_config.dart';
 import 'network/api_client.dart';
@@ -46,4 +49,16 @@ final watchlistRepositoryProvider = Provider<WatchlistRepository>(
 
 final chatRepositoryProvider = Provider<ChatRepository>(
   (ref) => ChatRepository(ref.watch(apiClientProvider)),
+);
+
+final assetRepositoryProvider = Provider<AssetRepository>(
+  (ref) => AssetRepository(ref.watch(apiClientProvider)),
+);
+
+final alertsRepositoryProvider = Provider<AlertsRepository>(
+  (ref) => AlertsRepository(ref.watch(apiClientProvider)),
+);
+
+final marketDataRepositoryProvider = Provider<MarketDataRepository>(
+  (ref) => MarketDataRepository(ref.watch(apiClientProvider)),
 );

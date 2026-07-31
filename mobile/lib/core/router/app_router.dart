@@ -2,11 +2,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/alerts/presentation/alerts_screen.dart';
 import '../../features/asset_detail/presentation/asset_detail_screen.dart';
 import '../../features/auth/presentation/auth_controller.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/chat/presentation/chat_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
+import '../../features/watchlist/data/watchlist_models.dart';
 import '../../features/watchlist/presentation/watchlist_screen.dart';
 import '../providers.dart';
 import '../widgets/app_shell.dart';
@@ -51,9 +53,19 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/asset/:ticker',
-        builder: (context, state) =>
-            AssetDetailScreen(ticker: state.pathParameters['ticker']!),
+        builder: (context, state) {
+          final assetTypeParam = state.uri.queryParameters['assetType'];
+          return AssetDetailScreen(
+            ticker: state.pathParameters['ticker']!,
+            // Default a STOCK si algún call site viejo no manda el query param — nunca
+            // debería pasar en pantallas nuevas, pero evita un crash por un link externo.
+            assetType: assetTypeParam != null
+                ? AssetTypeJson.fromJson(assetTypeParam)
+                : AssetType.stock,
+          );
+        },
       ),
+      GoRoute(path: '/alerts', builder: (context, state) => const AlertsScreen()),
     ],
   );
 });

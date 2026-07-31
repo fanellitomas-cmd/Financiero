@@ -1,24 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/api_error.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../watchlist/data/watchlist_models.dart';
 import '../data/push_notification_payload.dart';
 import '../widgets/lightweight_chart_view.dart';
 import 'asset_detail_controller.dart';
 
-/// Pantalla 3: Ficha de Inteligencia Profunda de un activo.
+/// Pantalla 3: Ficha de Inteligencia Profunda de un activo. Combina dos fuentes: un fetch
+/// on-demand contra `GET /api/v1/assets/{ticker}` al abrir la pantalla (`assetIntelligenceProvider`,
+/// para no depender de esperar la próxima corrida del scheduler) y el WebSocket en vivo
+/// (`tickerPayloadProvider`, para reflejar al toque una alerta nueva mientras la pantalla ya
+/// está abierta). El WS tiene prioridad cuando ambos tienen datos.
 ///
-/// TODO(backend): hoy no existe un `GET /api/v1/assets/{ticker}` para pedir el análisis "on
-/// demand" — esta pantalla solo recibe datos cuando el motor despacha una alerta nueva para
-/// `ticker` (vía `WS /api/v1/ws/{ticker}`, ver `app/api/v1/websocket.py`), así que al entrar
-/// puede quedar "esperando" hasta la próxima corrida del scheduler. Un endpoint de lectura
-/// bajo demanda (reusando `AgentRunnerService._run_single_ticker`) es el próximo paso natural.
-/// El chart tampoco tiene todavía una fuente de velas históricas — se ve con datos de ejemplo,
-/// marcados explícitamente, hasta que exista ese endpoint.
+/// El chart todavía no tiene una fuente de velas históricas real — se ve con datos de
+/// ejemplo, marcados explícitamente en la UI, hasta que el backend exponga ese endpoint.
 class AssetDetailScreen extends ConsumerStatefulWidget {
-  const AssetDetailScreen({super.key, required this.ticker});
+  const AssetDetailScreen({super.key, required this.ticker, required this.assetType});
 
   final String ticker;
+  final AssetType assetType;
 
   @override
   ConsumerState<AssetDetailScreen> createState() => _AssetDetailScreenState();
@@ -29,34 +31,55 @@ class _AssetDetailScreenState extends ConsumerState<AssetDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final payloadAsync = ref.watch(tickerPayloadProvider(widget.ticker));
+    final args = (widget.ticker, widget.assetType);
+    final liveAsync = ref.watch(tickerPayloadProvider(widget.ticker));
+    final onDemandAsync = ref.watch(assetIntelligenceProvider(args));
+
+    final effectivePayload = liveAsync.valueOrNull ?? onDemandAsync.valueOrNull;
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.ticker)),
-      body: payloadAsync.when(
-        data: (payload) => _AssetDetailBody(
-          payload: payload,
-          showBeginner: _showBeginnerOverride ?? payload.defaultViewIsBeginner,
-          onToggleBeginner: (value) => setState(() => _showBeginnerOverride = value),
-        ),
-        loading: () => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const CircularProgressIndicator(),
-                const SizedBox(height: 16),
-                Text(
-                  'Esperando la próxima actualización en vivo de ${widget.ticker}…',
-                  textAlign: TextAlign.center,
+      body: effectivePayload != null
+          ? _AssetDetailBody(
+              payload: effectivePayload,
+              showBeginner: _showBeginnerOverride ?? effectivePayload.defaultViewIsBeginner,
+              onToggleBeginner: (value) => setState(() => _showBeginnerOverride = value),
+            )
+          : onDemandAsync.when(
+              // `data` solo se ejecuta acá si `effectivePayload` fue null a pesar de tener
+              // datos, lo cual no debería pasar (`valueOrNull` ya lo hubiese devuelto arriba)
+              // — placeholder defensivo, no un camino real.
+              data: (_) => const SizedBox.shrink(),
+              loading: () => Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 16),
+                      Text('Analizando ${widget.ticker}…', textAlign: TextAlign.center),
+                    ],
+                  ),
                 ),
-              ],
+              ),
+              error: (error, stackTrace) => Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(describeApiError(error), textAlign: TextAlign.center),
+                      const SizedBox(height: 12),
+                      FilledButton(
+                        onPressed: () => ref.invalidate(assetIntelligenceProvider(args)),
+                        child: const Text('Reintentar'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
-          ),
-        ),
-        error: (error, _) => Center(child: Text('No se pudo conectar: $error')),
-      ),
     );
   }
 }

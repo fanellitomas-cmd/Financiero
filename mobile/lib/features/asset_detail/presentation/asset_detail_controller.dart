@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/ticker_socket_service.dart';
 import '../../../core/providers.dart';
+import '../../watchlist/data/watchlist_models.dart';
 import '../data/push_notification_payload.dart';
 
 /// Una conexión WebSocket nueva por ticker (no un singleton compartido): a diferencia del
@@ -16,4 +17,15 @@ final tickerPayloadProvider = StreamProvider.autoDispose
   ref.onDispose(socketService.disconnect);
 
   return socketService.connect(ticker).map(PushNotificationPayload.fromJson);
+});
+
+/// Fetch on-demand contra `GET /api/v1/assets/{ticker}` (`AssetRepository`) — se dispara una
+/// vez al abrir la Ficha, para no depender de esperar la próxima corrida del scheduler. El
+/// WebSocket de `tickerPayloadProvider` sigue activo en paralelo: si llega una alerta nueva
+/// mientras la pantalla está abierta, la pantalla la prioriza sobre este resultado (ver
+/// `asset_detail_screen.dart`).
+final assetIntelligenceProvider = FutureProvider.autoDispose
+    .family<PushNotificationPayload, (String, AssetType)>((ref, args) {
+  final (ticker, assetType) = args;
+  return ref.watch(assetRepositoryProvider).getAssetIntelligence(ticker, assetType);
 });
