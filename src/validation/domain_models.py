@@ -204,7 +204,16 @@ class GuardrailResult(BaseModel):
         return self
 
 
+class NotificationChannel(str, Enum):
+    TELEGRAM = "TELEGRAM"
+    DISCORD = "DISCORD"
+
+
 class NotificationPayload(BaseModel):
+    """Salida del Nodo 5 (Spec.md §3.5): resultado final del despacho, incluyendo si realmente
+    se envió, por qué canal, y el ID del mensaje para poder rastrearlo o editarlo después.
+    """
+
     model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
 
     ticker: str
@@ -212,3 +221,8 @@ class NotificationPayload(BaseModel):
     degraded_raw_data_only: bool = False
     rendered_text: str
     asset_projection: AssetProjection | None = None
+
+    notification_sent: bool
+    sent_at: datetime
+    message_id: str | None = None
+    channel: NotificationChannel | None = None

@@ -28,5 +28,11 @@ class Settings(BaseSettings):
     gemini_temperature: float = 0.2
     gemini_timeout_seconds: float = 30.0
 
+    telegram_bot_token: SecretStr | None = None
+    telegram_chat_id: str | None = None
+    telegram_base_url: str = "https://api.telegram.org"
+
+    discord_webhook_url: SecretStr | None = None
+
 
 settings = Settings()

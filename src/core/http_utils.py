@@ -1,7 +1,11 @@
-"""Utilidad única de reintentos con backoff exponencial para todos los clientes de ingesta
-(.cursorrules §4: "nunca reintentos ad-hoc copiados y pegados por cliente"). Traduce timeouts,
-errores de transporte y códigos 429/5xx a las excepciones de dominio de `core/exceptions.py` —
-ningún cliente concreto atrapa `httpx.HTTPError` directamente.
+"""Utilidad única de reintentos con backoff exponencial para todos los clientes HTTP del
+proyecto — tanto los de `ingestion/` (Polygon, FMP, Tavily, Gemini) como los de
+`notification/` (Telegram, Discord). Vive en `core/` porque ambas capas la necesitan y
+`notification/` tiene prohibido importar de `ingestion/` directamente (.cursorrules §3); una
+utilidad de infraestructura sin lógica de negocio no pertenece a ninguna de las dos, sino a la
+base común. Traduce timeouts, errores de transporte y códigos 429/5xx a las excepciones de
+dominio de `core/exceptions.py` (.cursorrules §4: "nunca reintentos ad-hoc copiados y pegados
+por cliente") — ningún cliente concreto atrapa `httpx.HTTPError` directamente.
 """
 
 from __future__ import annotations

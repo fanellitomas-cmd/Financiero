@@ -27,7 +27,7 @@ from src.core.exceptions import (
     ProviderResponseError,
     ProviderTimeoutError,
 )
-from src.ingestion.http_utils import request_with_retries
+from src.core.http_utils import request_with_retries
 from src.ingestion.schemas_raw import GeminiGenerationResult
 from src.validation.domain_models import DataStatus
 

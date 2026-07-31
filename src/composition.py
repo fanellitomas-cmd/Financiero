@@ -23,6 +23,9 @@ from src.ingestion.fmp_client import FMPClient
 from src.ingestion.gemini_client import GeminiClient
 from src.ingestion.polygon_client import PolygonClient
 from src.ingestion.tavily_client import TavilyClient
+from src.notification.discord_client import DiscordClient
+from src.notification.dispatcher import ChannelNotificationDispatcher
+from src.notification.telegram_client import TelegramClient
 from src.processing.guardrail_auditor import HeuristicGuardrailAuditor
 from src.processing.scenario_evaluator import GeminiScenarioEvaluator
 
@@ -49,17 +52,19 @@ def build_ingestion_backed_dependencies(
     gemini_client: GeminiClient | None = None,
     scenario_evaluator: ScenarioEvaluator | None = None,
     guardrail: GuardrailAuditor | None = None,
-    notifier: NotificationDispatcher,
+    notifier: NotificationDispatcher | None = None,
+    telegram_client: TelegramClient | None = None,
+    telegram_chat_id: str | None = None,
+    discord_client: DiscordClient | None = None,
 ) -> RuntimeGraphDependencies:
-    """Conecta los clientes HTTP ya inicializados a los puertos `market_data` (Nodo 1),
-    `deep_research` (Nodo 2), `scenario_evaluator` (Nodo 3, Gemini) y `guardrail` (Nodo 4).
+    """Conecta los clientes HTTP ya inicializados a los cinco puertos del grafo.
 
     `scenario_evaluator` puede pasarse explícito (ej. un doble de prueba) o construirse
     automáticamente a partir de `gemini_client`; se requiere exactamente uno de los dos.
-    `guardrail` por defecto usa `HeuristicGuardrailAuditor` (sin dependencias externas), pero
-    puede reemplazarse (ej. por un doble de prueba). El puerto del Nodo 5 todavía no tiene
-    implementación de producción — el llamador debe proveerlo explícitamente; esta función
-    nunca lo rellena con un stub silencioso.
+    `guardrail` por defecto usa `HeuristicGuardrailAuditor` (sin dependencias externas).
+    `notifier` puede pasarse explícito o construirse automáticamente a partir de
+    `telegram_client`/`discord_client` (al menos uno configurado; `ChannelNotificationDispatcher`
+    intenta Telegram primero y cae a Discord si falla o no está configurado).
     """
 
     if scenario_evaluator is None:
@@ -72,6 +77,13 @@ def build_ingestion_backed_dependencies(
 
     if guardrail is None:
         guardrail = HeuristicGuardrailAuditor()
+
+    if notifier is None:
+        notifier = ChannelNotificationDispatcher(
+            telegram_client=telegram_client,
+            telegram_chat_id=telegram_chat_id,
+            discord_client=discord_client,
+        )
 
     return RuntimeGraphDependencies(
         market_data=PolygonMarketDataAdapter(polygon_client),
