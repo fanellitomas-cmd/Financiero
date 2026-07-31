@@ -1,0 +1,47 @@
+"""Motor y sesión async de SQLAlchemy 2.0. Un único engine reutilizado por toda la app
+(.cursorrules §4: "un único cliente reutilizado por proveedor"), con `async_sessionmaker`
+para obtener una sesión por request vía `app/api/deps.py::get_db`.
+"""
+
+from __future__ import annotations
+
+from collections.abc import AsyncGenerator
+
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+from sqlalchemy.orm import DeclarativeBase
+
+from app.core.config import app_settings
+
+
+class Base(DeclarativeBase):
+    """Base declarativa de todos los modelos ORM (`app/models/`)."""
+
+
+def create_engine() -> AsyncEngine:
+    return create_async_engine(
+        app_settings.database_url, echo=app_settings.database_echo
+    )
+
+
+engine = create_engine()
+async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
+
+
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    async with async_session_factory() as session:
+        yield session
+
+
+async def create_all_tables(bound_engine: AsyncEngine = engine) -> None:
+    """Crea las tablas si no existen. Suficiente para desarrollo/demo; en producción esto se
+    reemplaza por migraciones versionadas (ej. Alembic) — no se incluyen acá para no fijar una
+    herramienta de migraciones sin que el equipo lo haya decidido explícitamente.
+    """
+
+    async with bound_engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
