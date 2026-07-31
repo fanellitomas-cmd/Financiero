@@ -128,6 +128,7 @@ class AgentRunnerService:
         push_dispatched = (
             dispatch_result.fcm_dispatched
             or dispatch_result.websocket_delivered_count > 0
+            or dispatch_result.device_push_delivered_count > 0
         )
         await self._persist_alert_history(payload, push_dispatched=push_dispatched)
 

@@ -14,6 +14,7 @@ from app.core.database import Base
 from app.models.enums import PlanType
 
 if TYPE_CHECKING:
+    from app.models.device_token import DeviceToken
     from app.models.watchlist import WatchlistItem
 
 
@@ -36,4 +37,7 @@ class User(Base):
 
     watchlist_items: Mapped[list[WatchlistItem]] = relationship(
         "WatchlistItem", back_populates="user", cascade="all, delete-orphan"
+    )
+    device_tokens: Mapped[list[DeviceToken]] = relationship(
+        "DeviceToken", back_populates="user", cascade="all, delete-orphan"
     )

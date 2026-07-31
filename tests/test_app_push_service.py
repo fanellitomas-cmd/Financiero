@@ -13,7 +13,8 @@ import httpx
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.security import hash_password
-from app.models.enums import AssetType
+from app.models.device_token import DeviceToken
+from app.models.enums import AssetType, DevicePlatform
 from app.models.user import User
 from app.models.watchlist import WatchlistItem
 from app.services.push_service import PushNotificationService, TickerConnectionManager
@@ -48,6 +49,7 @@ async def _add_watcher(
     ticker: str,
     *,
     beginner_mode: bool,
+    fcm_token: str | None = None,
 ) -> None:
     async with session_factory() as session:
         user = User(
@@ -64,6 +66,14 @@ async def _add_watcher(
                 enable_beginner_mode=beginner_mode,
             )
         )
+        if fcm_token is not None:
+            session.add(
+                DeviceToken(
+                    user_id=user.id,
+                    fcm_token=fcm_token,
+                    platform=DevicePlatform.ANDROID,
+                )
+            )
         await session.commit()
 
 
@@ -191,3 +201,40 @@ async def test_dispatch_broadcasts_over_connection_manager(
     assert result.websocket_delivered_count == 1
     assert len(connection.received) == 1
     assert connection.received[0]["ticker"] == "NVDA"
+
+
+async def test_dispatch_sends_personalized_push_to_registered_device_tokens(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await _add_watcher(
+        db_session_factory, "NVDA", beginner_mode=False, fcm_token="device-token-1"
+    )
+    await _add_watcher(
+        db_session_factory, "NVDA", beginner_mode=True, fcm_token="device-token-2"
+    )
+    await _add_watcher(db_session_factory, "NVDA", beginner_mode=False)  # sin device
+
+    sent_tokens: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = request.read()
+        sent_tokens.append(body.decode())
+        return httpx.Response(200, json={"name": "projects/x/messages/1"})
+
+    fcm = FCMClient(
+        "proj",
+        "token",
+        http_client=httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+            base_url="https://fcm.googleapis.com/v1",
+        ),
+    )
+    service = PushNotificationService(db_session_factory, fcm_client=fcm)
+
+    try:
+        result = await service.dispatch_to_watchers(_make_payload("NVDA"))
+        assert result.device_push_delivered_count == 2
+        assert any("device-token-1" in body for body in sent_tokens)
+        assert any("device-token-2" in body for body in sent_tokens)
+    finally:
+        await fcm.aclose()

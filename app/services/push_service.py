@@ -1,16 +1,14 @@
 """Toma el `PushNotificationPayload` del Nodo 5 (`src/notification/`) y lo entrega a los
-usuarios que siguen ese ticker en su `Watchlist`. La entrega real usa FCM (broadcast por
-tópico, reutilizando `src/notification/fcm_client.py` — el mismo cliente que ya usa el motor)
-y/o WebSocket (broadcast a las conexiones activas suscriptas a ese ticker).
-
-No hay tabla de device tokens en este esquema todavía, así que no hay fan-out por token
-individual por usuario — eso queda para cuando se agregue esa tabla. Por ahora, la consulta a
-`Watchlists` determina CUÁNTOS usuarios están interesados (para `AlertHistory`/métricas) y su
-preferencia agregada de `enable_beginner_mode`; la entrega en sí es por tópico/broadcast.
+usuarios que siguen ese ticker en su `Watchlist`. La entrega real combina tres canales:
+FCM por tópico (broadcast a quien se suscribió a `alerts_{ticker}` sin login), FCM por
+token (push personalizado a los `DeviceTokens` de los usuarios que SÍ siguen ese ticker en
+su Watchlist) y WebSocket (broadcast a las conexiones activas suscriptas a ese ticker).
+Todo reutilizando `src/notification/fcm_client.py` — el mismo cliente que ya usa el motor.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections import defaultdict
 from typing import Protocol
@@ -19,6 +17,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.models.device_token import DeviceToken
 from app.models.watchlist import WatchlistItem
 from src.notification.fcm_client import FCMClient
 from src.validation.domain_models import DataStatus, PushNotificationPayload
@@ -79,6 +78,7 @@ class WatcherDispatchResult(BaseModel):
     beginner_preference_count: int
     fcm_dispatched: bool
     websocket_delivered_count: int
+    device_push_delivered_count: int = 0
 
 
 class PushNotificationService:
@@ -105,6 +105,15 @@ class PushNotificationService:
                 )
             ).all()
 
+            device_tokens = (
+                await session.execute(
+                    select(DeviceToken.fcm_token)
+                    .join(WatchlistItem, WatchlistItem.user_id == DeviceToken.user_id)
+                    .where(WatchlistItem.ticker == payload.ticker)
+                    .distinct()
+                )
+            ).all()
+
         watcher_count = len(rows)
         beginner_preference_count = sum(1 for (is_beginner,) in rows if is_beginner)
 
@@ -118,6 +127,18 @@ class PushNotificationService:
                     "push_service_fcm_dispatch_failed", extra={"ticker": payload.ticker}
                 )
 
+        device_push_delivered_count = 0
+        if self._fcm_client is not None and device_tokens:
+            results = await asyncio.gather(
+                *(
+                    self._fcm_client.send_to_token(token, payload)
+                    for (token,) in device_tokens
+                )
+            )
+            device_push_delivered_count = sum(
+                1 for result in results if result.status == DataStatus.OK
+            )
+
         websocket_delivered_count = 0
         if self._connection_manager is not None and watcher_count > 0:
             websocket_delivered_count = await self._connection_manager.broadcast(
@@ -130,4 +151,5 @@ class PushNotificationService:
             beginner_preference_count=beginner_preference_count,
             fcm_dispatched=fcm_dispatched,
             websocket_delivered_count=websocket_delivered_count,
+            device_push_delivered_count=device_push_delivered_count,
         )

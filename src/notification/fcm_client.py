@@ -73,16 +73,34 @@ class FCMClient:
     async def send_to_topic(
         self, topic: str, payload: PushNotificationPayload
     ) -> FCMSendResult:
-        """Publica `payload` al tópico `topic` (ej. `alerts_NVDA`) — el sistema no maneja
-        tokens de dispositivo por usuario todavía, así que se transmite por tópico y cada app
-        se suscribe al ticker que le interesa. `data` va todo en string (requisito de FCM).
+        """Publica `payload` al tópico `topic` (ej. `alerts_NVDA`) — broadcast para todos los
+        clientes suscriptos a ese ticker, sin importar el usuario. `data` va todo en string
+        (requisito de FCM).
         """
 
+        return await self._send({"topic": topic}, payload, log_target=topic)
+
+    async def send_to_token(
+        self, token: str, payload: PushNotificationPayload
+    ) -> FCMSendResult:
+        """Envía `payload` a un único dispositivo (`DeviceToken.fcm_token`) — push
+        personalizado directo, a diferencia del broadcast por tópico de `send_to_topic`.
+        """
+
+        return await self._send({"token": token}, payload, log_target=token)
+
+    async def _send(
+        self,
+        target: dict[str, str],
+        payload: PushNotificationPayload,
+        *,
+        log_target: str,
+    ) -> FCMSendResult:
         dispatched_at = datetime.now(timezone.utc)
         path = f"/projects/{self._project_id}/messages:send"
         body: dict[str, Any] = {
             "message": {
-                "topic": topic,
+                **target,
                 "notification": {"title": payload.title, "body": payload.short_summary},
                 "data": {
                     "notification_id": payload.notification_id,
@@ -113,7 +131,9 @@ class FCMClient:
             ProviderAuthenticationError,
             ProviderResponseError,
         ) as exc:
-            logger.warning("fcm_send_failed", extra={"topic": topic, "error": str(exc)})
+            logger.warning(
+                "fcm_send_failed", extra={"target": log_target, "error": str(exc)}
+            )
             return FCMSendResult(
                 status=DataStatus.ERROR_API,
                 message_name=None,

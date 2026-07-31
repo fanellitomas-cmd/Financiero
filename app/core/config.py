@@ -22,5 +22,9 @@ class AppSettings(BaseSettings):
 
     default_alert_threshold_pct: str = "3.0"
 
+    scheduler_enabled: bool = True
+    scheduler_interval_minutes: int = 15
+    scheduler_market_hours_only: bool = False
+
 
 app_settings = AppSettings()

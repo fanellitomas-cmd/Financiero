@@ -38,9 +38,9 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def create_all_tables(bound_engine: AsyncEngine = engine) -> None:
-    """Crea las tablas si no existen. Suficiente para desarrollo/demo; en producción esto se
-    reemplaza por migraciones versionadas (ej. Alembic) — no se incluyen acá para no fijar una
-    herramienta de migraciones sin que el equipo lo haya decidido explícitamente.
+    """Crea las tablas si no existen. Atajo cómodo para desarrollo/tests; en producción el
+    esquema se gestiona con las migraciones versionadas de Alembic (`alembic/`,
+    `alembic upgrade head`), que es la fuente de verdad real del schema ahí.
     """
 
     async with bound_engine.begin() as connection:

@@ -17,9 +17,11 @@ from fastapi import FastAPI
 
 from app import models as _models  # noqa: F401  registra las tablas en Base.metadata
 from app.api.v1.router import api_v1_router
+from app.core.config import app_settings
 from app.core.database import async_session_factory, create_all_tables, engine
 from app.services.agent_runner_service import AgentRunnerService
 from app.services.push_service import PushNotificationService, TickerConnectionManager
+from app.services.scheduler import AgentScheduler
 from src.composition import build_ingestion_backed_dependencies
 from src.core.config import settings as agent_settings
 from src.ingestion.fmp_client import FMPClient
@@ -102,9 +104,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         )
         app.state.agent_runner_service = None
 
+    scheduler: AgentScheduler | None = None
+    if app.state.agent_runner_service is not None and app_settings.scheduler_enabled:
+        scheduler = AgentScheduler(
+            app.state.agent_runner_service,
+            interval_minutes=app_settings.scheduler_interval_minutes,
+            market_hours_only=app_settings.scheduler_market_hours_only,
+        )
+        scheduler.start()
+    app.state.scheduler = scheduler
+
     try:
         yield
     finally:
+        if scheduler is not None:
+            scheduler.shutdown()
         for client in ingestion_clients:
             await client.aclose()
         if fcm_client is not None:

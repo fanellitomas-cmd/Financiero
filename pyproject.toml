@@ -1,3 +1,9 @@
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[[tool.mypy.overrides]]
+# apscheduler no publica stubs ni un marker py.typed (a la fecha, versión 3.x) — no es un
+# problema de nuestro código, así que se ignora puntualmente acá en vez de bajar --strict.
+module = "apscheduler.*"
+ignore_missing_imports = true

@@ -22,3 +22,9 @@ class AssetType(str, Enum):
 
     STOCK = "STOCK"
     CRYPTO = "CRYPTO"
+
+
+class DevicePlatform(str, Enum):
+    IOS = "IOS"
+    ANDROID = "ANDROID"
+    WEB = "WEB"
