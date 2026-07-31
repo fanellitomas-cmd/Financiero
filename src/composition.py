@@ -1,0 +1,62 @@
+"""Composition root: ensambla instancias concretas de ingesta detrás de los puertos que
+`processing/` consume (`core/dependencies.py`). Solo este módulo conoce simultáneamente los
+clientes HTTP de `ingestion/` y las Protocols de `processing/` — ningún nodo importa
+`PolygonClient`/`FMPClient`/`TavilyClient` directamente (.cursorrules §3).
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from src.core.dependencies import (
+    DeepResearchProvider,
+    GuardrailAuditor,
+    MarketDataProvider,
+    NotificationDispatcher,
+    ScenarioEvaluator,
+)
+from src.ingestion.adapters import (
+    FundamentalsAndNewsResearchAdapter,
+    PolygonMarketDataAdapter,
+)
+from src.ingestion.fmp_client import FMPClient
+from src.ingestion.polygon_client import PolygonClient
+from src.ingestion.tavily_client import TavilyClient
+
+
+@dataclass
+class RuntimeGraphDependencies:
+    """Implementación concreta de `GraphDependencies` (Protocol, `core/dependencies.py`):
+    satisface su forma estructuralmente sin heredar de él, para poder pasarse tal cual a
+    `processing.graph.build_graph`.
+    """
+
+    market_data: MarketDataProvider
+    deep_research: DeepResearchProvider
+    scenario_evaluator: ScenarioEvaluator
+    guardrail: GuardrailAuditor
+    notifier: NotificationDispatcher
+
+
+def build_ingestion_backed_dependencies(
+    polygon_client: PolygonClient,
+    fmp_client: FMPClient,
+    tavily_client: TavilyClient,
+    *,
+    scenario_evaluator: ScenarioEvaluator,
+    guardrail: GuardrailAuditor,
+    notifier: NotificationDispatcher,
+) -> RuntimeGraphDependencies:
+    """Conecta los tres clientes HTTP ya inicializados a los puertos `market_data` (Nodo 1) y
+    `deep_research` (Nodo 2). Los puertos de los Nodos 3/4/5 todavía no tienen implementación
+    de producción (pendiente: LLM de Gemini) — el llamador debe proveerlos explícitamente;
+    esta función nunca los rellena con un stub silencioso.
+    """
+
+    return RuntimeGraphDependencies(
+        market_data=PolygonMarketDataAdapter(polygon_client),
+        deep_research=FundamentalsAndNewsResearchAdapter(tavily_client, fmp_client),
+        scenario_evaluator=scenario_evaluator,
+        guardrail=guardrail,
+        notifier=notifier,
+    )
