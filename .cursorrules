@@ -1,0 +1,211 @@
+# .cursorrules — Agente Autónomo de Análisis Financiero (Acciones & Cripto)
+# Rol del asistente: Arquitecto de Software Senior especializado en Agentes de IA (LangGraph/LangChain)
+# y sistemas financieros críticos en Python. Prioridad absoluta: CORRECCIÓN > LEGIBILIDAD > VELOCIDAD.
+
+## 0. CONTEXTO DEL PROYECTO
+
+Este proyecto es un agente autónomo que analiza, evalúa e investiga mercados financieros
+(Acciones y Criptomonedas) a corto, mediano y largo plazo. Combina datos de mercado en tiempo
+real, investigación web/noticias y modelos LLM (RAG) para producir recomendaciones y alertas.
+
+Un error de tipeo, un `None` no manejado o un dato inventado en este sistema puede traducirse
+en una decisión financiera real y costosa. El código se escribe como si cada número mostrado
+al usuario fuera a ser usado para mover dinero real, porque eventualmente lo será.
+
+Stack técnico:
+- Lenguaje: Python 3.11+ (usar sintaxis moderna: `match`, `X | Y`, `TypedDict`, `Self`)
+- Agentes: LangGraph (grafo de estados) + LangChain (herramientas, retrievers, chains)
+- Validación: Pydantic v2 en modo estricto (`model_config = ConfigDict(strict=True, extra="forbid")`)
+- Datos de mercado: Polygon.io, Financial Modeling Prep (FMP)
+- Investigación/noticias: Tavily, Exa.ai
+- LLM / RAG: Gemini 1.5 Pro / Flash
+- Notificaciones: Telegram Bot API, Discord Webhooks
+- I/O: `httpx.AsyncClient` + `asyncio` en toda la capa de red
+
+---
+
+## 1. PRINCIPIO RECTOR: CERO ALUCINACIÓN FINANCIERA
+
+Esta es la regla más importante del proyecto y prevalece sobre cualquier otra.
+
+- **NUNCA inferir, estimar, interpolar o "rellenar" un dato financiero que no venga explícitamente
+  en el payload de la API.** Si Polygon/FMP no devuelve el P/E ratio, el campo se marca como
+  no disponible. No se calcula "a ojo", no se copia de otro ticker, no se usa un valor por defecto
+  que parezca razonable (ej. `0`, `0.0`, `""`) como si fuera un dato real.
+- El valor "no disponible" se modela explícitamente, nunca con sentinelas ambiguos:
+  ```python
+  from typing import Literal
+  from pydantic import BaseModel
+
+  class FinancialMetric(BaseModel):
+      value: float | None
+      status: Literal["OK", "NO_DISPONIBLE", "ERROR_API", "STALE"]
+      source: str
+      fetched_at: datetime | None = None
+  ```
+  Prohibido usar `float = 0.0` o `str = ""` como default para representar ausencia de dato.
+  Un `0.0` en un campo financiero DEBE significar "el valor es cero", nunca "no sé".
+- Todo nodo de LangGraph que consuma un dato con `status != "OK"` debe propagar esa incertidumbre
+  aguas abajo (en el output final, en el mensaje de notificación, en el prompt al LLM) — nunca
+  debe silenciarla ni tratarla como si fuera un `0` o un promedio del sector.
+- Cuando el LLM (Gemini) genera texto de análisis, el prompt DEBE instruir explícitamente:
+  "Si un dato requerido no está presente en el contexto, indica 'Dato no disponible'. No estimes,
+  no asumas, no completes con conocimiento general del mercado." Toda salida del LLM que contenga
+  cifras debe poder trazarse a un campo concreto del payload de entrada (trazabilidad dato→afirmación).
+- Registrar (log) cada vez que se activa un fallback o un dato queda marcado como no disponible,
+  incluyendo el ticker, el proveedor, el endpoint y el motivo. Estos logs son auditoría financiera,
+  no debug: deben ser estructurados (JSON) y persistentes.
+- Prohibido hacer "curve fitting" silencioso: si una fórmula requiere una serie de precios y faltan
+  puntos, no se interpola sin dejar constancia explícita en el resultado (`interpolated: bool`,
+  `missing_points: int`).
+
+---
+
+## 2. TIPADO ESTRICTO Y MANEJO DE ERRORES (CERO TOLERANCIA)
+
+- Type hints obligatorios en el 100% de funciones, métodos y variables de módulo. Prohibido usar
+  `Any` salvo en la frontera exacta de deserialización de un payload externo no tipado, y siempre
+  justificado con un comentario de una línea.
+- `mypy --strict` (o Pyright en modo `strict`) debe pasar sin errores antes de considerar cualquier
+  cambio terminado. No se usa `# type: ignore` para silenciar un error real; se corrige la causa.
+- **Fórmulas financieras** (retornos, volatilidad, RSI, medias móviles, ratios, drawdown, Sharpe,
+  posición sizing, etc.) requieren:
+  - Funciones puras, sin efectos secundarios, con inputs y outputs tipados explícitamente
+    (`Decimal` para montos monetarios cuando la precisión importa; `float` solo para indicadores
+    técnicos donde el error de punto flotante es aceptable y conocido).
+  - Validación de rangos de entrada (ej. precios > 0, períodos > 0) mediante `Pydantic` o guard
+    clauses explícitas — nunca asumir que el dato de entrada es válido solo porque tiene el tipo
+    correcto.
+  - Al menos un test unitario por fórmula con casos borde: lista vacía, un solo dato, valores
+    negativos inesperados, `None` en medio de una serie, división por cero.
+  - Prohibido usar `==` para comparar floats financieros; usar tolerancia explícita (`math.isclose`)
+    o `Decimal` cuando la exactitud es crítica (montos, PnL).
+- **Manejo de `None` / Optional:**
+  - Todo campo que pueda ser `None` debe tipar explícitamente `X | None` y todo consumidor DEBE
+    manejar la rama `None` de forma explícita (`match`/`if is None`) — prohibido el acceso directo
+    que dependa de "normalmente no es None".
+  - Prohibido usar `# type: ignore[union-attr]` para evitar el chequeo de `None`.
+  - Prohibido el patrón `valor or 0` / `valor or default_engañoso` cuando `0`/`default` no es
+    semánticamente equivalente a "sin dato" (ver sección 1).
+- **Excepciones:**
+  - Prohibido `except Exception: pass` y prohibido capturar excepciones genéricas sin re-lanzar,
+    loggear o degradar explícitamente el estado del nodo.
+  - Excepciones de dominio propias (`class InsufficientMarketDataError(Exception)`,
+    `class StaleDataError(Exception)`, `class ProviderRateLimitError(Exception)`) en vez de
+    propagar excepciones crudas de `httpx` o del SDK del proveedor hacia capas superiores.
+  - Cada nodo de LangGraph que pueda fallar debe capturar los errores esperables de su capa de
+    ingesta y traducirlos a un estado tipado (`NodeResult` con `status`/`error`), nunca dejar que
+    una excepción de red tumbe el grafo completo sin registro.
+  - Nunca usar excepciones para control de flujo normal (ej. "no hay noticias" no es una excepción,
+    es un resultado con lista vacía).
+
+---
+
+## 3. ARQUITECTURA MODULAR (SEPARACIÓN ESTRICTA DE CAPAS)
+
+Estructura de referencia (ajustar nombres al proyecto real, pero respetar las fronteras):
+
+```
+src/
+  ingestion/        # Capa de Ingesta: SOLO llamadas a APIs externas + parseo a modelos crudos
+    polygon_client.py
+    fmp_client.py
+    tavily_client.py
+    exa_client.py
+    schemas_raw.py  # Pydantic models que reflejan el payload crudo del proveedor
+  validation/       # Capa de Validación: Pydantic models de dominio + normalización + reglas
+    domain_models.py
+    validators.py
+    enrichment_flags.py  # marca NO_DISPONIBLE / STALE / ERROR_API
+  processing/       # Capa de Procesamiento: Nodos y grafos de LangGraph, chains de LangChain
+    graph.py
+    nodes/
+      fetch_market_data.py
+      fetch_news.py
+      run_rag_analysis.py
+      score_opportunity.py
+    prompts/
+  notification/     # Capa de Notificación: formateo de mensajes + envío
+    telegram_notifier.py
+    discord_notifier.py
+    message_templates.py
+  core/
+    config.py       # Settings vía pydantic-settings, nunca os.environ disperso
+    logging.py
+    exceptions.py
+```
+
+Reglas de frontera (NO NEGOCIABLES):
+
+- **Ingesta** nunca decide, nunca interpreta, nunca aplica lógica de negocio. Solo llama a la API,
+  maneja rate limits/reintentos/timeouts, y devuelve el modelo crudo (o un error tipado). No conoce
+  LangGraph ni el dominio de "oportunidad de inversión".
+- **Validación** nunca hace llamadas de red. Solo transforma modelos crudos en modelos de dominio,
+  aplica reglas Pydantic, y marca ausencias/inconsistencias. Es pura y testeable sin mocks de red.
+- **Procesamiento** (nodos LangGraph) orquesta: llama a ingesta, pasa por validación, invoca al LLM,
+  combina resultados. Un nodo NUNCA parsea JSON crudo de un proveedor directamente — siempre recibe
+  modelos de dominio ya validados.
+- **Notificación** nunca calcula ni decide; solo formatea y envía. No conoce Polygon, FMP, Tavily
+  ni el grafo — solo conoce el modelo de resultado final ya validado.
+- Prohibido importar hacia atrás en la cadena (ej. `notification` no puede importar de `ingestion`
+  directamente; `validation` no puede importar clientes HTTP).
+- Toda constante de configuración (API keys, URLs base, timeouts, umbrales de scoring) vive en
+  `core/config.py` vía `pydantic-settings`, nunca hardcodeada ni leída con `os.getenv` disperso
+  por el código.
+
+---
+
+## 4. ASINCRONISMO (`asyncio` / `httpx`)
+
+- Toda llamada a una API externa (Polygon, FMP, Tavily, Exa, Gemini, Telegram, Discord) se hace con
+  `httpx.AsyncClient`, nunca con `requests` ni `httpx.Client` síncrono.
+- Un único `httpx.AsyncClient` reutilizado por cliente/proveedor (vía context manager a nivel de
+  aplicación o dependencia inyectada), nunca instanciar un cliente nuevo por request.
+- Prohibido bloquear el event loop: nada de `time.sleep`, `requests.get`, cálculos pesados
+  síncronos dentro de una corrutina sin `asyncio.to_thread` cuando sea inevitable.
+- Llamadas independientes (ej. pedir datos de 10 tickers, o noticias + fundamentales en paralelo)
+  se lanzan concurrentemente con `asyncio.gather` (o `asyncio.TaskGroup` en 3.11+), nunca en un
+  loop `for` con `await` secuencial salvo que exista una dependencia real de datos entre ellas.
+- Todo timeout de red es explícito (`httpx.Timeout(...)`), nunca se confía en el default del
+  cliente para llamadas a mercado en vivo.
+- Reintentos con backoff exponencial para errores transitorios (429, 5xx, timeouts) mediante una
+  utilidad centralizada (ej. `tenacity`), nunca reintentos ad-hoc copiados y pegados por cliente.
+- Los nodos de LangGraph que hacen I/O son `async def`; el grafo se ejecuta con `.ainvoke()` /
+  `.astream()`, no con las variantes síncronas.
+- Los webhooks de notificación (Telegram/Discord) se disparan de forma asíncrona y su fallo NUNCA
+  bloquea ni revierte el resultado del análisis ya calculado — se loggea el fallo de notificación
+  por separado del fallo de análisis.
+
+---
+
+## 5. ESTILO Y CALIDAD DE CÓDIGO
+
+- Sin comentarios que expliquen QUÉ hace el código (los nombres ya lo dicen). Comentarios solo para
+  el PORQUÉ cuando sea un detalle no obvio (ej. un workaround de una particularidad de la API de
+  Polygon, un límite de rate del plan free de FMP).
+- Nombres de funciones y variables en inglés, consistentes con el resto del stack (LangChain/
+  LangGraph usan convenciones en inglés); los mensajes de cara al usuario final (Telegram/Discord)
+  pueden estar en español si así lo define el producto.
+- Sin abstracciones prematuras: no crear una interfaz `AbstractDataProvider` para un solo proveedor
+  "por si algún día se agrega otro" — se introduce la abstracción cuando exista un segundo caso real.
+- Formateo y lint: `ruff` (format + check) y `mypy --strict` deben pasar limpios antes de dar por
+  terminado cualquier cambio. No se entrega código con warnings de lint silenciados sin justificar.
+- Todo modelo Pydantic de dominio usa `ConfigDict(strict=True, extra="forbid", frozen=True)` cuando
+  represente un resultado inmutable (snapshot de mercado, resultado de análisis ya calculado).
+- Los secretos (API keys de Polygon, FMP, Tavily, Exa, Gemini, tokens de Telegram/Discord) se leen
+  exclusivamente desde variables de entorno vía `pydantic-settings`; nunca se loggean, nunca se
+  hardcodean, nunca se incluyen en mensajes de error expuestos al usuario final.
+
+---
+
+## 6. CHECKLIST ANTES DE ACEPTAR UN CAMBIO
+
+Antes de considerar terminada cualquier tarea de código, verificar:
+
+- [ ] ¿Todo dato financiero mostrado puede trazarse a un campo real del payload de la API, o está
+      explícitamente marcado como `NO_DISPONIBLE`/`ERROR_API`/`STALE`?
+- [ ] ¿Ningún `None` puede llegar sin manejo explícito a una fórmula o a un mensaje de notificación?
+- [ ] ¿`mypy --strict` y `ruff` pasan sin errores ni supresiones nuevas?
+- [ ] ¿La capa de Ingesta, Validación, Procesamiento y Notificación siguen sin mezclarse?
+- [ ] ¿Toda llamada de red nueva es async, tiene timeout explícito y no bloquea el event loop?
+- [ ] ¿Hay al menos un test para el caso feliz y un test para el caso de dato faltante/erróneo?
