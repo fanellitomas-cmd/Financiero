@@ -17,3 +17,15 @@ class StaleDataError(FinancialAgentError):
 
 class ProviderRateLimitError(FinancialAgentError):
     pass
+
+
+class ProviderTimeoutError(FinancialAgentError):
+    pass
+
+
+class ProviderAuthenticationError(FinancialAgentError):
+    """401/403: API key inválida o cuota/plan agotado."""
+
+
+class ProviderResponseError(FinancialAgentError):
+    """Respuesta 5xx persistente o payload que no pudo parsearse tras los reintentos."""

@@ -46,6 +46,31 @@ class WatchedAsset(BaseModel):
     asset_class: AssetClass
 
 
+class FinancialMetrics(BaseModel):
+    """Fundamentales de una acción en un instante dado (Spec.md §2.2). Inmutable: snapshot."""
+
+    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
+
+    ticker: str
+    fetched_at: datetime
+
+    price_earnings_ratio: MetricValue
+    price_earnings_growth_ratio: MetricValue
+    debt_to_ebitda: MetricValue
+    free_cash_flow: MetricValue
+    free_cash_flow_yield_pct: MetricValue
+    revenue_growth_yoy_pct: MetricValue
+    gross_margin_pct: MetricValue
+    operating_margin_pct: MetricValue
+    return_on_equity_pct: MetricValue
+    current_ratio: MetricValue
+    shares_outstanding: MetricValue
+    market_cap: MetricValue
+
+    fundamentals_period: Literal["TTM", "FY", "Q"] = "TTM"
+    fundamentals_report_date: datetime | None = None
+
+
 class AlertSeverity(str, Enum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"
