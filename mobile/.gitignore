@@ -1,0 +1,44 @@
+# .gitignore estándar de Flutter — `android/`, `ios/`, `web/` SÍ se comitean una vez generados
+# (`flutter create .`, ver mobile/README.md); acá solo van artefactos de build y credenciales.
+
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# Android
+**/android/.gradle
+**/android/captures/
+**/android/gradlew
+**/android/gradlew.bat
+**/android/local.properties
+**/android/key.properties
+**/android/**/GeneratedPluginRegistrant.java
+*.jks
+
+# iOS/macOS
+**/ios/**/Pods/
+**/ios/**/.symlinks/
+**/ios/Flutter/App.framework
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/ephemeral
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/Runner/GeneratedPluginRegistrant.*
+**/ios/**/xcuserdata/
+
+coverage/
+
+# Credenciales de Firebase — nunca se comitean, cada dev/entorno las agrega localmente
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+macos/Runner/GoogleService-Info.plist
+lib/firebase_options.dart

@@ -1,0 +1,45 @@
+name: financiero_app
+description: Cliente Flutter (iOS/Android/Web) de Financiero — dashboard, chat con el agente, ficha de inteligencia profunda y watchlist con notificaciones push.
+publish_to: "none"
+version: 0.1.0
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Estado/DI
+  flutter_riverpod: ^2.6.1
+
+  # Navegación
+  go_router: ^14.6.2
+
+  # HTTP (un único cliente reutilizado, ver lib/core/network/api_client.dart)
+  dio: ^5.7.0
+
+  # Persistencia segura del JWT
+  flutter_secure_storage: ^9.2.2
+
+  # WebSocket en tiempo real (/api/v1/ws/{ticker})
+  web_socket_channel: ^3.0.1
+
+  # Chart estilo TradingView: Lightweight Charts es una lib JS, se embebe vía WebView
+  webview_flutter: ^4.10.0
+
+  # Push notifications nativas (FCM)
+  firebase_core: ^3.8.0
+  firebase_messaging: ^15.1.5
+
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/charts/lightweight_chart.html
