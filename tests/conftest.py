@@ -46,6 +46,8 @@ async def client(
 
     app.dependency_overrides[get_db] = _override_get_db
     app.state.agent_runner_service = None
+    app.state.chat_service = None
+    app.state.market_data_service = None
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(

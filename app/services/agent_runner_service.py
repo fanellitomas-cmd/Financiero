@@ -10,6 +10,7 @@ usuario se resuelve del lado del cliente/push, no re-corriendo el análisis por 
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta, timezone
 
 from langgraph.graph.state import CompiledStateGraph
 from sqlalchemy import select
@@ -36,6 +37,17 @@ _ASSET_TYPE_TO_ASSET_CLASS = {
     AssetType.STOCK: AssetClass.EQUITY,
     AssetType.CRYPTO: AssetClass.CRYPTO,
 }
+
+
+class AssetIntelligenceUnavailableError(Exception):
+    """El motor corrió pero no produjo un `PushNotificationPayload` (ej. no se detectó
+    ningún `MarketAlert` para este ticker) — `GET /api/v1/assets/{ticker}` la traduce a un
+    502 explícito en vez de devolver un cuerpo vacío o inventado.
+    """
+
+    def __init__(self, ticker: str) -> None:
+        super().__init__(f"No se pudo generar un análisis para {ticker}.")
+        self.ticker = ticker
 
 
 class AgentRunnerService:
@@ -85,20 +97,80 @@ class AgentRunnerService:
             resolved.append((normalized, asset_type))
         return resolved
 
-    async def _run_single_ticker(
+    async def get_or_compute_payload(
+        self, ticker: str, asset_type: AssetType, *, max_age: timedelta
+    ) -> PushNotificationPayload:
+        """Para `GET /api/v1/assets/{ticker}` (Ficha on-demand): devuelve el último
+        `PushNotificationPayload` persistido si es lo bastante reciente (`max_age`), o corre
+        el motor sincrónicamente para este único ticker si no hay uno fresco. A diferencia de
+        `run_for_tickers` (el cron/trigger), NO despacha push a los watchers acá — es una
+        lectura activa del usuario que abrió la Ficha, no una alerta nueva; sí se persiste en
+        `AlertHistory` para que la próxima lectura on-demand (o el próximo cron) encuentre un
+        resultado fresco sin tener que recalcular.
+        """
+
+        normalized_ticker = ticker.upper()
+        cached = await self._recent_alert_payload(normalized_ticker, max_age=max_age)
+        if cached is not None:
+            return cached
+
+        payload = await self._invoke_graph(normalized_ticker, asset_type)
+        if payload is None:
+            raise AssetIntelligenceUnavailableError(normalized_ticker)
+
+        await self._persist_alert_history(payload, push_dispatched=False)
+        return payload
+
+    async def _recent_alert_payload(
+        self, ticker: str, *, max_age: timedelta
+    ) -> PushNotificationPayload | None:
+        async with self._session_factory() as session:
+            row = await session.scalar(
+                select(AlertHistory)
+                .where(AlertHistory.ticker == ticker)
+                .order_by(AlertHistory.created_at.desc())
+                .limit(1)
+            )
+
+        if row is None:
+            return None
+
+        # Comparación en Python (no en la query SQL): SQLite no guarda offset de timezone
+        # para `DateTime(timezone=True)`, así que un WHERE created_at >= cutoff con un
+        # datetime tz-aware podría comparar strings con formato distinto. Acá se asume UTC
+        # para el valor naive que devuelve `func.now()` en SQLite.
+        created_at = row.created_at
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) - created_at > max_age:
+            return None
+
+        # strict=False: el payload viaja por la columna JSON de AlertHistory, y JSON no
+        # tiene tipo nativo para Decimal/Enum — mismo caso que el resto de las fronteras
+        # JSON del proyecto (WatchlistItemCreate, la salida de Gemini en
+        # scenario_evaluator.py). Los modelos de dominio siguen siendo strict en general.
+        return PushNotificationPayload.model_validate(row.payload_json, strict=False)
+
+    async def _invoke_graph(
         self, ticker: str, asset_type: AssetType
-    ) -> TickerRunResult:
+    ) -> PushNotificationPayload | None:
         asset = WatchedAsset(
             ticker=ticker, asset_class=_ASSET_TYPE_TO_ASSET_CLASS[asset_type]
         )
-
-        try:
-            final_state = await self._graph.ainvoke(
-                AgentState(
-                    watched_asset=asset,
-                    user_profile=UserProfile.FICHA_INTELIGENCIA_PROFUNDA,
-                )
+        final_state = await self._graph.ainvoke(
+            AgentState(
+                watched_asset=asset,
+                user_profile=UserProfile.FICHA_INTELIGENCIA_PROFUNDA,
             )
+        )
+        payload = final_state.get("notification_payload")
+        return payload if isinstance(payload, PushNotificationPayload) else None
+
+    async def _run_single_ticker(
+        self, ticker: str, asset_type: AssetType
+    ) -> TickerRunResult:
+        try:
+            payload = await self._invoke_graph(ticker, asset_type)
         except Exception as exc:  # noqa: BLE001 — límite de un job por lote: se degrada y
             # se registra explícitamente en vez de propagar, para que un ticker roto (red,
             # proveedor caído, bug) no tumbe la corrida completa del cron sobre el resto de
@@ -114,7 +186,6 @@ class AgentRunnerService:
                 error=str(exc),
             )
 
-        payload = final_state.get("notification_payload")
         if payload is None:
             return TickerRunResult(
                 ticker=ticker, asset_type=asset_type, alert_generated=False

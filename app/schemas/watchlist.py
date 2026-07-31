@@ -23,6 +23,15 @@ class WatchlistItemCreate(BaseModel):
     enable_beginner_mode: bool = False
 
 
+class WatchlistItemUpdate(BaseModel):
+    # strict=False deliberado, mismo motivo que WatchlistItemCreate arriba: valida JSON
+    # externo de un request HTTP. Todos los campos son opcionales — PATCH parcial, no PUT.
+    model_config = ConfigDict(extra="forbid")
+
+    alert_threshold_pct: Decimal | None = Field(default=None, gt=0, le=100)
+    enable_beginner_mode: bool | None = None
+
+
 class WatchlistItemRead(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid", from_attributes=True)
 

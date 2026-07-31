@@ -50,6 +50,76 @@ async def test_cannot_add_duplicate_ticker(client: httpx.AsyncClient) -> None:
     assert second.status_code == 409
 
 
+async def test_update_watchlist_item(client: httpx.AsyncClient) -> None:
+    headers = await _register_and_login(client, "watcher-patch@example.com")
+    created = (
+        await client.post(
+            "/api/v1/watchlist",
+            json={"ticker": "MSFT", "asset_type": "STOCK"},
+            headers=headers,
+        )
+    ).json()
+
+    patch_response = await client.patch(
+        f"/api/v1/watchlist/{created['id']}",
+        json={"alert_threshold_pct": "7.5", "enable_beginner_mode": True},
+        headers=headers,
+    )
+    assert patch_response.status_code == 200
+    updated = patch_response.json()
+    assert updated["alert_threshold_pct"] == "7.50"
+    assert updated["enable_beginner_mode"] is True
+
+
+async def test_update_watchlist_item_partial_leaves_other_field_untouched(
+    client: httpx.AsyncClient,
+) -> None:
+    headers = await _register_and_login(client, "watcher-patch2@example.com")
+    created = (
+        await client.post(
+            "/api/v1/watchlist",
+            json={
+                "ticker": "GOOG",
+                "asset_type": "STOCK",
+                "alert_threshold_pct": "4.0",
+                "enable_beginner_mode": True,
+            },
+            headers=headers,
+        )
+    ).json()
+
+    patch_response = await client.patch(
+        f"/api/v1/watchlist/{created['id']}",
+        json={"alert_threshold_pct": "9.0"},
+        headers=headers,
+    )
+    updated = patch_response.json()
+    assert updated["alert_threshold_pct"] == "9.00"
+    assert updated["enable_beginner_mode"] is True
+
+
+async def test_cannot_update_another_users_watchlist_item(
+    client: httpx.AsyncClient,
+) -> None:
+    owner_headers = await _register_and_login(client, "patchowner@example.com")
+    other_headers = await _register_and_login(client, "patchintruder@example.com")
+
+    created = (
+        await client.post(
+            "/api/v1/watchlist",
+            json={"ticker": "AMZN", "asset_type": "STOCK"},
+            headers=owner_headers,
+        )
+    ).json()
+
+    patch_response = await client.patch(
+        f"/api/v1/watchlist/{created['id']}",
+        json={"enable_beginner_mode": True},
+        headers=other_headers,
+    )
+    assert patch_response.status_code == 404
+
+
 async def test_delete_watchlist_item(client: httpx.AsyncClient) -> None:
     headers = await _register_and_login(client, "watcher3@example.com")
     created = (

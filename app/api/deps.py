@@ -15,6 +15,8 @@ from app.core.database import get_db
 from app.core.security import decode_access_token
 from app.models.user import User
 from app.services.agent_runner_service import AgentRunnerService
+from app.services.chat_service import ChatService
+from app.services.market_data_service import MarketDataService
 
 _oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
@@ -75,3 +77,42 @@ def get_agent_runner_service(request: Request) -> AgentRunnerService:
 
 
 AgentRunner = Annotated[AgentRunnerService, Depends(get_agent_runner_service)]
+
+
+def get_chat_service(request: Request) -> ChatService:
+    """Igual que `get_agent_runner_service`: el `ChatService` se construye una única vez en
+    el lifespan (`app/main.py`), envolviendo el mismo `GeminiClient` reutilizado. Si Gemini
+    no está configurado, el lifespan nunca lo instancia — 503 explícito acá.
+    """
+
+    service = getattr(request.app.state, "chat_service", None)
+    if not isinstance(service, ChatService):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="El chat no está configurado en este entorno (falta GEMINI_API_KEY en .env).",
+        )
+    return service
+
+
+ChatServiceDep = Annotated[ChatService, Depends(get_chat_service)]
+
+
+def get_market_data_service(request: Request) -> MarketDataService:
+    """Igual que `get_agent_runner_service`: se construye una única vez en el lifespan,
+    envolviendo el mismo `PolygonClient` reutilizado. 503 explícito si Polygon no está
+    configurado.
+    """
+
+    service = getattr(request.app.state, "market_data_service", None)
+    if not isinstance(service, MarketDataService):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Los precios en vivo no están configurados en este entorno "
+                "(falta POLYGON_API_KEY en .env)."
+            ),
+        )
+    return service
+
+
+MarketData = Annotated[MarketDataService, Depends(get_market_data_service)]

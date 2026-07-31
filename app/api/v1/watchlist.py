@@ -11,7 +11,11 @@ from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
 from app.models.watchlist import WatchlistItem
-from app.schemas.watchlist import WatchlistItemCreate, WatchlistItemRead
+from app.schemas.watchlist import (
+    WatchlistItemCreate,
+    WatchlistItemRead,
+    WatchlistItemUpdate,
+)
 
 router = APIRouter(prefix="/watchlist", tags=["watchlist"])
 
@@ -50,6 +54,30 @@ async def add_to_watchlist(
         enable_beginner_mode=payload.enable_beginner_mode,
     )
     session.add(item)
+    await session.commit()
+    await session.refresh(item)
+    return item
+
+
+@router.patch("/{item_id}", response_model=WatchlistItemRead)
+async def update_watchlist_item(
+    item_id: UUID,
+    payload: WatchlistItemUpdate,
+    current_user: CurrentUser,
+    session: DbSession,
+) -> WatchlistItem:
+    item = await session.get(WatchlistItem, item_id)
+    if item is None or item.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Item de watchlist no encontrado.",
+        )
+
+    if payload.alert_threshold_pct is not None:
+        item.alert_threshold_pct = payload.alert_threshold_pct
+    if payload.enable_beginner_mode is not None:
+        item.enable_beginner_mode = payload.enable_beginner_mode
+
     await session.commit()
     await session.refresh(item)
     return item

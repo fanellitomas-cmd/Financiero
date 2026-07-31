@@ -22,6 +22,19 @@ class AlertHistoryRead(BaseModel):
     created_at: datetime
 
 
+class AlertHistoryPage(BaseModel):
+    """Página de `GET /api/v1/alerts` — filtrada a los tickers de la Watchlist del usuario
+    autenticado, más nuevo primero.
+    """
+
+    model_config = ConfigDict(strict=True, extra="forbid")
+
+    items: list[AlertHistoryRead]
+    total: int
+    limit: int
+    offset: int
+
+
 class TriggerAgentRequest(BaseModel):
     """Cuerpo opcional del disparo del Cron/Scheduler. Si `tickers` es `None`, se corre sobre
     todos los tickers distintos presentes en `Watchlists` — el uso normal para un cron

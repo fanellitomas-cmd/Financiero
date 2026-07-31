@@ -26,5 +26,8 @@ class AppSettings(BaseSettings):
     scheduler_interval_minutes: int = 15
     scheduler_market_hours_only: bool = False
 
+    asset_intelligence_max_age_minutes: int = 15
+    alert_history_default_page_size: int = 20
+
 
 app_settings = AppSettings()

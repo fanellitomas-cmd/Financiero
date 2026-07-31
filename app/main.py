@@ -20,6 +20,8 @@ from app.api.v1.router import api_v1_router
 from app.core.config import app_settings
 from app.core.database import async_session_factory, create_all_tables, engine
 from app.services.agent_runner_service import AgentRunnerService
+from app.services.chat_service import ChatService
+from app.services.market_data_service import MarketDataService
 from app.services.push_service import PushNotificationService, TickerConnectionManager
 from app.services.scheduler import AgentScheduler
 from src.composition import build_ingestion_backed_dependencies
@@ -54,34 +56,73 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     )
     app.state.push_service = push_service
 
+    # Cada cliente se construye UNA vez si su propia credencial está presente, y se reutiliza
+    # tanto para su servicio standalone (quotes/chat) como para el motor completo — nunca dos
+    # instancias del mismo cliente (.cursorrules §4). El motor completo (AgentRunnerService)
+    # necesita los cuatro; los servicios standalone solo necesitan el suyo.
     ingestion_clients: list[
         PolygonClient | FMPClient | TavilyClient | GeminiClient
     ] = []
-    if (
-        agent_settings.polygon_api_key
-        and agent_settings.fmp_api_key
-        and agent_settings.tavily_api_key
-        and agent_settings.gemini_api_key
-    ):
+
+    polygon: PolygonClient | None = None
+    if agent_settings.polygon_api_key:
         polygon = PolygonClient(
             agent_settings.polygon_api_key.get_secret_value(),
             base_url=agent_settings.polygon_base_url,
         )
+        ingestion_clients.append(polygon)
+
+    fmp: FMPClient | None = None
+    if agent_settings.fmp_api_key:
         fmp = FMPClient(
             agent_settings.fmp_api_key.get_secret_value(),
             base_url=agent_settings.fmp_base_url,
         )
+        ingestion_clients.append(fmp)
+
+    tavily: TavilyClient | None = None
+    if agent_settings.tavily_api_key:
         tavily = TavilyClient(
             agent_settings.tavily_api_key.get_secret_value(),
             base_url=agent_settings.tavily_base_url,
         )
+        ingestion_clients.append(tavily)
+
+    gemini: GeminiClient | None = None
+    if agent_settings.gemini_api_key:
         gemini = GeminiClient(
             agent_settings.gemini_api_key.get_secret_value(),
             base_url=agent_settings.gemini_base_url,
             model=agent_settings.gemini_model,
         )
-        ingestion_clients = [polygon, fmp, tavily, gemini]
+        ingestion_clients.append(gemini)
 
+    if polygon is not None:
+        app.state.market_data_service = MarketDataService(polygon)
+    else:
+        logger.warning(
+            "market_data_not_configured",
+            extra={
+                "hint": "falta POLYGON_API_KEY; /api/v1/market/quotes devolverá 503"
+            },
+        )
+        app.state.market_data_service = None
+
+    if gemini is not None:
+        app.state.chat_service = ChatService(gemini, async_session_factory)
+    else:
+        logger.warning(
+            "chat_not_configured",
+            extra={"hint": "falta GEMINI_API_KEY; /api/v1/chat devolverá 503"},
+        )
+        app.state.chat_service = None
+
+    if (
+        polygon is not None
+        and fmp is not None
+        and tavily is not None
+        and gemini is not None
+    ):
         # Sin internal_backend_client/fcm_client acá: el despacho real (persistir en
         # AlertHistory + avisar a los watchers) lo hace esta misma app vía PushNotificationService
         # después de recibir el PushNotificationPayload del grafo — evitar wirear el Nodo 5
@@ -98,7 +139,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             extra={
                 "hint": (
                     "faltan POLYGON_API_KEY/FMP_API_KEY/TAVILY_API_KEY/GEMINI_API_KEY; "
-                    "/api/v1/internal/trigger-agent devolverá 503 hasta configurarlas"
+                    "/api/v1/internal/trigger-agent y el scheduler quedan inactivos hasta "
+                    "configurarlas"
                 )
             },
         )
