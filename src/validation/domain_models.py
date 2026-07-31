@@ -130,6 +130,7 @@ class ResearchDossier(BaseModel):
     generated_at: datetime
     summary: str
     evidence: list[EvidenceItem] = Field(default_factory=list)
+    financial_metrics: FinancialMetrics | None = None
     fundamental_deterioration_score: Decimal | None = None
     market_reaction_magnitude: Decimal | None = None
 

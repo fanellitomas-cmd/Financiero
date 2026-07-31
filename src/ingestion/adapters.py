@@ -24,6 +24,7 @@ from src.validation.domain_models import (
     AssetClass,
     DataStatus,
     EvidenceItem,
+    FinancialMetrics,
     MarketAlert,
     MetricValue,
     ResearchDossier,
@@ -118,8 +119,9 @@ def _metric_repr(metric: MetricValue) -> str:
 
 
 class FundamentalsAndNewsResearchAdapter:
-    """Implementa `DeepResearchProvider` (Nodo 2, Spec.md §3.2) combinando noticias (Tavily)
-    y filings SEC (FMP).
+    """Implementa `DeepResearchProvider` (Nodo 2, Spec.md §3.2) combinando noticias (Tavily),
+    filings SEC (FMP) y fundamentales/ratios (FMP) — el contexto financiero verificado que
+    consume el Nodo 3 (Spec.md §3.3) junto con la síntesis cualitativa.
 
     No sintetiza con un LLM todavía: `summary` es una concatenación factual de lo
     efectivamente recuperado, nunca una interpretación. La síntesis con Gemini (ver
@@ -147,9 +149,15 @@ class FundamentalsAndNewsResearchAdapter:
 
         filings_10k: list[FilingReference] = []
         filings_10q: list[FilingReference] = []
+        financial_metrics: FinancialMetrics | None = None
 
         if asset.asset_class == AssetClass.EQUITY:
-            news_result, filings_10k, filings_10q = await asyncio.gather(
+            (
+                news_result,
+                filings_10k,
+                filings_10q,
+                financial_metrics,
+            ) = await asyncio.gather(
                 self._tavily.search_news(
                     query,
                     max_results=self._max_news_results,
@@ -157,6 +165,7 @@ class FundamentalsAndNewsResearchAdapter:
                 ),
                 self._fmp.list_recent_filings(asset.ticker, "10-K", limit=1),
                 self._fmp.list_recent_filings(asset.ticker, "10-Q", limit=1),
+                self._fmp.get_financial_metrics(asset.ticker),
             )
         else:
             news_result = await self._tavily.search_news(
@@ -172,9 +181,10 @@ class FundamentalsAndNewsResearchAdapter:
             ticker=asset.ticker,
             generated_at=datetime.now(timezone.utc),
             summary=_build_factual_summary(
-                asset, alert, news_result, filings_10k, filings_10q
+                asset, alert, news_result, filings_10k, filings_10q, financial_metrics
             ),
             evidence=evidence,
+            financial_metrics=financial_metrics,
         )
 
 
@@ -200,6 +210,7 @@ def _build_factual_summary(
     news_result: NewsSearchResult,
     filings_10k: list[FilingReference],
     filings_10q: list[FilingReference],
+    financial_metrics: FinancialMetrics | None,
 ) -> str:
     lines = [
         (
@@ -226,4 +237,35 @@ def _build_factual_summary(
         else:
             lines.append("No se encontraron filings 10-K/10-Q recientes.")
 
+        if financial_metrics is not None:
+            available = sum(
+                1
+                for field_name in _FUNDAMENTAL_METRIC_FIELDS
+                if getattr(financial_metrics, field_name).status == DataStatus.OK
+            )
+            lines.append(
+                f"Fundamentales FMP: {available}/{len(_FUNDAMENTAL_METRIC_FIELDS)} "
+                "métricas disponibles."
+            )
+        else:
+            lines.append(
+                "No se pudieron recuperar fundamentales de FMP para esta alerta."
+            )
+
     return " ".join(lines)
+
+
+_FUNDAMENTAL_METRIC_FIELDS = (
+    "price_earnings_ratio",
+    "price_earnings_growth_ratio",
+    "debt_to_ebitda",
+    "free_cash_flow",
+    "free_cash_flow_yield_pct",
+    "revenue_growth_yoy_pct",
+    "gross_margin_pct",
+    "operating_margin_pct",
+    "return_on_equity_pct",
+    "current_ratio",
+    "shares_outstanding",
+    "market_cap",
+)

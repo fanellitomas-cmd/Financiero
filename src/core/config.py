@@ -22,5 +22,11 @@ class Settings(BaseSettings):
     tavily_api_key: SecretStr | None = None
     tavily_base_url: str = "https://api.tavily.com"
 
+    gemini_api_key: SecretStr | None = None
+    gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
+    gemini_model: str = "gemini-1.5-pro"
+    gemini_temperature: float = 0.2
+    gemini_timeout_seconds: float = 30.0
+
 
 settings = Settings()

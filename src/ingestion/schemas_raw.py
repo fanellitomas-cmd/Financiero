@@ -62,3 +62,18 @@ class NewsSearchResult(BaseModel):
     fetched_at: datetime
     status: DataStatus
     articles: list[EvidenceItem] = Field(default_factory=list)
+
+
+class GeminiGenerationResult(BaseModel):
+    """Salida cruda de `GeminiClient`: el texto JSON generado, sin parsear ni validar contra
+    ningún modelo de dominio — eso es responsabilidad del Nodo 3 (Spec.md §3.3), que sabe qué
+    forma final espera (`AssetProjection`).
+    """
+
+    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
+
+    status: DataStatus
+    raw_json_text: str | None
+    finish_reason: str | None
+    model: str
+    generated_at: datetime
