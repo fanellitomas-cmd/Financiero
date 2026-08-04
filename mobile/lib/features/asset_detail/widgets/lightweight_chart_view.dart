@@ -1,7 +1,10 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+
+import '../../../core/theme/app_theme.dart';
 
 class Candle {
   const Candle({
@@ -26,16 +29,80 @@ class Candle {
 /// Envuelve Lightweight Charts (TradingView) — es una librería JS, así que se embebe vía
 /// `webview_flutter` cargando `assets/charts/lightweight_chart.html` y empujando los datos
 /// con `runJavaScript` en vez de re-renderizar el HTML en cada actualización.
-class LightweightChartView extends StatefulWidget {
+///
+/// `webview_flutter` solo declara implementación para android/ios/macos: en Web, Linux y
+/// Windows no hay plataforma que monte el WebView y `WebViewWidget` termina pintando un
+/// bloque gris claro sin estilo que además ignora el alto del padre. Por eso acá se decide
+/// primero si la plataforma lo soporta y, si no, se muestra un placeholder con el tema en vez
+/// de un rectángulo roto — es la misma degradación explícita que el resto de la app.
+class LightweightChartView extends StatelessWidget {
   const LightweightChartView({super.key, required this.candles});
 
   final List<Candle> candles;
 
+  /// Plataformas donde `webview_flutter` tiene implementación registrada.
+  static bool get isSupportedPlatform {
+    if (kIsWeb) return false;
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.android ||
+      TargetPlatform.iOS ||
+      TargetPlatform.macOS =>
+        true,
+      _ => false,
+    };
+  }
+
   @override
-  State<LightweightChartView> createState() => _LightweightChartViewState();
+  Widget build(BuildContext context) {
+    if (!isSupportedPlatform) return const _ChartUnavailable();
+    return _WebViewChart(candles: candles);
+  }
 }
 
-class _LightweightChartViewState extends State<LightweightChartView> {
+class _ChartUnavailable extends StatelessWidget {
+  const _ChartUnavailable();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceSunken,
+        borderRadius: BorderRadius.circular(AppTheme.radius),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.candlestick_chart_outlined,
+                  size: 36, color: AppTheme.textMuted),
+              SizedBox(height: 12),
+              Text(
+                'El gráfico de velas se ve en la app móvil.\n'
+                'Falta una implementación de chart para esta plataforma.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WebViewChart extends StatefulWidget {
+  const _WebViewChart({required this.candles});
+
+  final List<Candle> candles;
+
+  @override
+  State<_WebViewChart> createState() => _WebViewChartState();
+}
+
+class _WebViewChartState extends State<_WebViewChart> {
   late final WebViewController _controller;
   bool _pageLoaded = false;
 
@@ -44,7 +111,7 @@ class _LightweightChartViewState extends State<LightweightChartView> {
     super.initState();
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(const Color(0xFF0B0F14))
+      ..setBackgroundColor(AppTheme.background)
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageFinished: (_) {
@@ -57,7 +124,7 @@ class _LightweightChartViewState extends State<LightweightChartView> {
   }
 
   @override
-  void didUpdateWidget(covariant LightweightChartView oldWidget) {
+  void didUpdateWidget(covariant _WebViewChart oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (_pageLoaded && oldWidget.candles != widget.candles) {
       _pushData();

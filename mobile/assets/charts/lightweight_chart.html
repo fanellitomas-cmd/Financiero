@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <style>
-    html, body, #chart { margin: 0; padding: 0; height: 100%; width: 100%; background: #0b0f14; }
+    html, body, #chart { margin: 0; padding: 0; height: 100%; width: 100%; background: #0B0F19; }
   </style>
   <!--
     TODO(producción): esta versión carga Lightweight Charts desde unpkg (requiere internet en
@@ -18,10 +18,10 @@
   <div id="chart"></div>
   <script>
     const chart = LightweightCharts.createChart(document.getElementById('chart'), {
-      layout: { background: { color: '#0b0f14' }, textColor: '#d1d5db' },
+      layout: { background: { color: '#0B0F19' }, textColor: '#94A3B8' },
       grid: {
-        vertLines: { color: '#1f2933' },
-        horzLines: { color: '#1f2933' }
+        vertLines: { color: '#1E293B' },
+        horzLines: { color: '#1E293B' }
       },
       timeScale: { timeVisible: true, secondsVisible: false },
       width: window.innerWidth,
@@ -29,11 +29,11 @@
     });
 
     const candleSeries = chart.addCandlestickSeries({
-      upColor: '#22c55e',
-      downColor: '#ef4444',
+      upColor: '#10B981',
+      downColor: '#F87171',
       borderVisible: false,
-      wickUpColor: '#22c55e',
-      wickDownColor: '#ef4444'
+      wickUpColor: '#10B981',
+      wickDownColor: '#F87171'
     });
 
     // Llamado desde Flutter (LightweightChartView._pushData) vía controller.runJavaScript
