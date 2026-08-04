@@ -85,7 +85,7 @@ class _FooterLoadMore extends StatelessWidget {
         padding: EdgeInsets.all(16),
         child: Center(
           child: Text('No hay más notificaciones.',
-              style: TextStyle(color: Colors.grey)),
+              style: TextStyle(color: AppTheme.textMuted)),
         ),
       );
     }
@@ -117,7 +117,7 @@ class _AlertTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = switch (item.urgencyLevel) {
-      AlertUrgency.low => Colors.grey,
+      AlertUrgency.low => AppTheme.textMuted,
       AlertUrgency.medium => AppTheme.neutral,
       AlertUrgency.high => AppTheme.bearish,
       AlertUrgency.critical => AppTheme.bearish,
@@ -130,14 +130,14 @@ class _AlertTile extends StatelessWidget {
           backgroundColor: color.withValues(alpha: 0.15),
           child: Text(
             item.ticker.substring(0, 1),
-            style: TextStyle(color: color, fontWeight: FontWeight.bold),
+            style: AppTheme.tickerSymbol.copyWith(color: color),
           ),
         ),
         title: Text(item.title ?? item.ticker),
         subtitle: Text(item.shortSummary ?? 'Sin resumen disponible.'),
         trailing: Text(
           DateFormat('dd/MM HH:mm').format(item.createdAt.toLocal()),
-          style: const TextStyle(color: Colors.grey, fontSize: 12),
+          style: const TextStyle(color: AppTheme.textMuted, fontSize: 12),
         ),
       ),
     );

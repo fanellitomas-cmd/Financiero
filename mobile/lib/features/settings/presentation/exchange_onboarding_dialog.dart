@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/theme/app_theme.dart';
+
 import '../../../core/providers.dart';
 import '../data/exchange_type.dart';
 
@@ -28,7 +30,7 @@ class ExchangeOnboardingDialog extends ConsumerWidget {
           const Text(
             'Elegí tu bolsa principal para enfocar el dashboard. Podés cambiarla cuando '
             'quieras desde el ícono en la barra superior.',
-            style: TextStyle(color: Colors.grey),
+            style: TextStyle(color: AppTheme.textMuted),
           ),
           const SizedBox(height: 16),
           for (final exchange in ExchangeType.values)

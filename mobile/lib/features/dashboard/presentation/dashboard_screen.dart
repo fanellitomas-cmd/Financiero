@@ -71,7 +71,7 @@ class DashboardScreen extends ConsumerWidget {
                             ? 'Todavía no seguís ningún activo.'
                             : 'No seguís ningún activo de '
                                 '${selectedExchange.displayName}.',
-                        style: const TextStyle(color: Colors.grey),
+                        style: const TextStyle(color: AppTheme.textMuted),
                       )
                     : _HeatmapGrid(
                         items: items, quotesByTicker: quotesByTicker),
@@ -82,7 +82,8 @@ class DashboardScreen extends ConsumerWidget {
                 const SizedBox(height: 8),
                 Text(
                   'Precios en vivo: ${describeApiError(quotesAsync.error!)}',
-                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+                  style:
+                      const TextStyle(color: AppTheme.textMuted, fontSize: 12),
                 ),
               ],
             ],
@@ -111,7 +112,7 @@ class _DailyDigestCard extends StatelessWidget {
             const Text(
               'El Daily Digest generado por el agente todavía no tiene un endpoint en el '
               'backend — placeholder hasta que se agregue.',
-              style: TextStyle(color: Colors.grey),
+              style: TextStyle(color: AppTheme.textMuted),
             ),
           ],
         ),
@@ -169,7 +170,7 @@ class _HeatmapTile extends ConsumerWidget {
     final changePct = hasValidQuote ? quote!.dayChangePct : null;
 
     final color = changePct == null
-        ? Colors.grey
+        ? AppTheme.textMuted
         : changePct >= 0
             ? AppTheme.bullish
             : AppTheme.bearish;
@@ -190,21 +191,28 @@ class _HeatmapTile extends ConsumerWidget {
         context
             .push('/asset/${item.ticker}?assetType=${item.assetType.toJson()}');
       },
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(AppTheme.radius),
       child: Container(
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.4)),
+          // Superficie de card + un velo del color de dirección: el tinte se lee como señal
+          // sin romper la continuidad visual con el resto de las cards.
+          color: hasValidQuote
+              ? Color.alphaBlend(
+                  color.withValues(alpha: 0.12), AppTheme.surface)
+              : AppTheme.surface,
+          borderRadius: BorderRadius.circular(AppTheme.radius),
+          border: Border.all(
+            color:
+                hasValidQuote ? color.withValues(alpha: 0.45) : AppTheme.border,
+          ),
         ),
         padding: const EdgeInsets.all(8),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(item.ticker,
-                style: const TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            Text(label, style: TextStyle(color: color, fontSize: 12)),
+            Text(item.ticker, style: AppTheme.tickerSymbol),
+            const SizedBox(height: 6),
+            Text(label, style: AppTheme.numeric(color: color)),
           ],
         ),
       ),

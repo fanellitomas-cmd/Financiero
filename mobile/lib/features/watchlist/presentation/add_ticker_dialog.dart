@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_error.dart';
 import '../../../core/providers.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../settings/data/exchange_type.dart';
 import '../../tickers/presentation/ticker_search_field.dart';
 import '../data/watchlist_models.dart';
@@ -186,7 +187,7 @@ class _StockSearch extends StatelessWidget {
             child: Text(
               'Buscando solo en ${filterExchange!.displayName} '
               '(la bolsa que elegiste arriba).',
-              style: const TextStyle(color: Colors.grey, fontSize: 12),
+              style: const TextStyle(color: AppTheme.textMuted, fontSize: 12),
             ),
           ),
         TickerSearchField(

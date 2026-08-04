@@ -157,7 +157,7 @@ class _AssetDetailBody extends StatelessWidget {
         const SizedBox(height: 4),
         const Text(
           'Datos de ejemplo — falta el endpoint de velas históricas (ver TODO arriba).',
-          style: TextStyle(color: Colors.grey, fontSize: 12),
+          style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
         ),
         const SizedBox(height: 20),
         Text(narrative.headline, style: Theme.of(context).textTheme.titleLarge),
@@ -188,7 +188,7 @@ class _UrgencyBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, color) = switch (urgency) {
-      AlertUrgency.low => ('BAJA', Colors.grey),
+      AlertUrgency.low => ('BAJA', AppTheme.textMuted),
       AlertUrgency.medium => ('MEDIA', AppTheme.neutral),
       AlertUrgency.high => ('ALTA', AppTheme.bearish),
       AlertUrgency.critical => ('CRÍTICA', AppTheme.bearish),
@@ -196,13 +196,14 @@ class _UrgencyBadge extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color),
+      decoration: AppTheme.badgeDecoration(color),
+      child: Text(
+        label,
+        style: AppTheme.numeric(
+          fontSize: 11,
+          color: color,
+        ).copyWith(fontWeight: FontWeight.bold),
       ),
-      child: Text(label,
-          style: TextStyle(color: color, fontWeight: FontWeight.bold)),
     );
   }
 }
@@ -228,7 +229,7 @@ class _HorizonCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               'Confianza: ${horizon.confidenceLevel}',
-              style: const TextStyle(color: Colors.grey, fontSize: 12),
+              style: const TextStyle(color: AppTheme.textMuted, fontSize: 12),
             ),
             const SizedBox(height: 8),
             for (final scenario in horizon.scenarios)
@@ -263,13 +264,26 @@ class _ScenarioBar extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('$label · ${scenario.probabilityPct.toStringAsFixed(0)}%'),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(label, style: const TextStyle(fontSize: 13)),
+              // Probabilidad en monoespaciada: las tres barras (alcista/neutral/bajista)
+              // quedan una debajo de otra, y con ancho fijo por dígito los porcentajes
+              // alinean y se comparan de un vistazo.
+              Text(
+                '${scenario.probabilityPct.toStringAsFixed(0)}%',
+                style: AppTheme.numeric(color: color),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
               value: scenario.probabilityPct / 100,
               color: color,
-              backgroundColor: color.withValues(alpha: 0.15),
+              backgroundColor: AppTheme.surfaceSunken,
               minHeight: 6,
             ),
           ),

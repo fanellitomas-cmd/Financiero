@@ -63,3 +63,11 @@ flutter:
         - asset: assets/fonts/LiberationSans-BoldItalic.ttf
           weight: 700
           style: italic
+    # Monoespaciada para símbolos, precios y porcentajes: en una columna de números, el ancho
+    # fijo por carácter alinea los dígitos verticalmente y hace comparables las magnitudes de un
+    # vistazo. Con una proporcional, "+11.20%" y "+9.80%" no arrancan en la misma coordenada.
+    - family: AppMono
+      fonts:
+        - asset: assets/fonts/LiberationMono-Regular.ttf
+        - asset: assets/fonts/LiberationMono-Bold.ttf
+          weight: 700

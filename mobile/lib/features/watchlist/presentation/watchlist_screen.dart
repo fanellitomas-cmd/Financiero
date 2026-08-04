@@ -207,8 +207,7 @@ class _WatchlistBody extends ConsumerWidget {
           // Resaltar el seleccionado solo importa en master-detail, donde la fila y su detalle
           // conviven en pantalla; en mobile la selección es efímera (navega y vuelve).
           selected: isSelected && context.isMasterDetail,
-          selectedTileColor: AppTheme.surface,
-          title: Text(item.ticker),
+          title: Text(item.ticker, style: AppTheme.tickerSymbol),
           subtitle: Text(_subtitleFor(item)),
           onTap: () => onOpen(item),
           trailing: Row(
@@ -268,7 +267,8 @@ class _FilterNotice extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.filter_alt_outlined, size: 18, color: Colors.grey),
+          const Icon(Icons.filter_alt_outlined,
+              size: 18, color: AppTheme.textMuted),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -276,7 +276,7 @@ class _FilterNotice extends StatelessWidget {
               '$hiddenCount ${hiddenCount == 1 ? "activo" : "activos"} '
               '${hiddenCount == 1 ? "oculto" : "ocultos"} '
               '(cripto u otra bolsa).',
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
+              style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
             ),
           ),
         ],
@@ -307,7 +307,7 @@ class _EmptyState extends ConsumerWidget {
               ? Icons.filter_alt_off_outlined
               : Icons.add_circle_outline,
           size: 40,
-          color: Colors.grey,
+          color: AppTheme.textMuted,
         ),
         const SizedBox(height: 16),
         Text(
@@ -317,7 +317,7 @@ class _EmptyState extends ConsumerWidget {
                   'Cambiá de bolsa arriba para verlos.'
               : 'Agregá tu primer ticker con el botón +',
           textAlign: TextAlign.center,
-          style: const TextStyle(color: Colors.grey),
+          style: const TextStyle(color: AppTheme.textMuted),
         ),
       ],
     );

@@ -54,12 +54,13 @@ class DetailPanelPlaceholder extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.insights_outlined, size: 44, color: Colors.grey),
+            const Icon(Icons.insights_outlined,
+                size: 44, color: AppTheme.textMuted),
             const SizedBox(height: 16),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.grey),
+              style: const TextStyle(color: AppTheme.textMuted),
             ),
           ],
         ),

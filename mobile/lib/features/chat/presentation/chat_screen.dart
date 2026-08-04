@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_error.dart';
 import '../../../core/providers.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../watchlist/presentation/watchlist_controller.dart';
 import '../data/chat_repository.dart';
 
@@ -121,7 +122,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                             'Preguntá lo que quieras sobre un activo, ej: '
                             '"¿qué pasó con NVDA hoy?"',
                             textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.grey),
+                            style: TextStyle(color: AppTheme.textMuted),
                           ),
                         ),
                       )
@@ -182,18 +183,29 @@ class _ChatBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final alignment =
         message.isFromUser ? Alignment.centerRight : Alignment.centerLeft;
-    final color = message.isFromUser
-        ? Theme.of(context).colorScheme.primaryContainer
-        : Theme.of(context).colorScheme.surfaceContainerHighest;
-
+    // Burbuja del usuario tintada con el acento; la del agente en superficie con borde, para
+    // que se distinga de un vistazo quién habla sin depender de la alineación sola.
     return Align(
       alignment: alignment,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 4),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        constraints: const BoxConstraints(maxWidth: 280),
+        // 78% del ancho disponible (no 280px fijos): en el chat de escritorio, acotado a
+        // 760px, una burbuja de 280 dejaba media línea de texto por renglón.
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.sizeOf(context).width * 0.78,
+        ),
         decoration: BoxDecoration(
-            color: color, borderRadius: BorderRadius.circular(16)),
+          color: message.isFromUser
+              ? AppTheme.accent.withValues(alpha: 0.16)
+              : AppTheme.surface,
+          borderRadius: BorderRadius.circular(AppTheme.radius + 4),
+          border: Border.all(
+            color: message.isFromUser
+                ? AppTheme.accent.withValues(alpha: 0.4)
+                : AppTheme.border,
+          ),
+        ),
         child: Text(message.text),
       ),
     );

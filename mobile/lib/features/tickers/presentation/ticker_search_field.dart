@@ -125,10 +125,7 @@ class _Results extends StatelessWidget {
           return ListTile(
             dense: true,
             contentPadding: EdgeInsets.zero,
-            title: Text(
-              ticker.symbol,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
+            title: Text(ticker.symbol, style: AppTheme.tickerSymbol),
             subtitle: Text(
               ticker.name,
               maxLines: 1,
@@ -154,17 +151,13 @@ class _ExchangeBadge extends StatelessWidget {
     // NASDAQ/NYSE van en gris, sin inventarles identidad visual.
     final color = switch (ticker.exchange) {
       ExchangeType.nasdaq => AppTheme.bullish,
-      ExchangeType.nyse => Theme.of(context).colorScheme.primary,
-      null => Colors.grey,
+      ExchangeType.nyse => AppTheme.accent,
+      null => AppTheme.textMuted,
     };
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
-      ),
+      decoration: AppTheme.badgeDecoration(color),
       child: Text(
         ticker.exchangeLabel,
         style:
@@ -187,7 +180,9 @@ class _Hint extends StatelessWidget {
       child: Text(
         text,
         style: TextStyle(
-          color: isError ? Theme.of(context).colorScheme.error : Colors.grey,
+          color: isError
+              ? Theme.of(context).colorScheme.error
+              : AppTheme.textMuted,
           fontSize: 12,
         ),
       ),
