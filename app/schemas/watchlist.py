@@ -7,7 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.enums import AssetType
+from app.models.enums import AssetType, ExchangeType
 
 
 class WatchlistItemCreate(BaseModel):
@@ -40,3 +40,6 @@ class WatchlistItemRead(BaseModel):
     asset_type: AssetType
     alert_threshold_pct: Decimal
     enable_beginner_mode: bool
+    # Resuelto por el backend desde el catálogo `tickers`, no enviado por el cliente. `None`
+    # cuando el símbolo no está en el catálogo (cripto, o una acción todavía no sincronizada).
+    exchange: ExchangeType | None

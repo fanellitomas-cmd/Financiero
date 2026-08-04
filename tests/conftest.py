@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import StaticPool
 
 from app import models as _models  # noqa: F401  registra las tablas en Base.metadata
-from app.core.database import Base, get_db
+from app.core.database import Base, get_db, get_session_factory
 from app.main import app
 
 
@@ -45,6 +45,10 @@ async def client(
             yield session
 
     app.dependency_overrides[get_db] = _override_get_db
+    # Los servicios que manejan su propia transacción (TickerCatalogService) reciben el factory,
+    # no una sesión ya abierta — sin este override apuntarían al SQLite de desarrollo en vez de
+    # a la base en memoria del test.
+    app.dependency_overrides[get_session_factory] = lambda: db_session_factory
     app.state.agent_runner_service = None
     app.state.chat_service = None
     app.state.market_data_service = None

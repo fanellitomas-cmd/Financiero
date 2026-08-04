@@ -5,6 +5,10 @@ leer ni borrar un item de otro usuario, aunque se conozca su UUID.
 from __future__ import annotations
 
 import httpx
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from app.models.enums import ExchangeType
+from app.models.ticker import Ticker
 
 
 async def _register_and_login(client: httpx.AsyncClient, email: str) -> dict[str, str]:
@@ -175,3 +179,105 @@ async def test_watchlist_isolated_between_users(client: httpx.AsyncClient) -> No
 
     assert len(list_a) == 1
     assert len(list_b) == 0
+
+
+# --- enriquecimiento automático de la bolsa desde el catálogo `tickers` ----------------------
+
+
+async def _seed_catalog(
+    session_factory: async_sessionmaker[AsyncSession],
+    symbol: str,
+    exchange: ExchangeType,
+) -> None:
+    async with session_factory() as session:
+        session.add(
+            Ticker(
+                symbol=symbol,
+                name=f"{symbol} Inc",
+                primary_exchange="XNAS" if exchange == ExchangeType.NASDAQ else "XNYS",
+                exchange=exchange,
+                asset_type="CS",
+                active=True,
+            )
+        )
+        await session.commit()
+
+
+async def test_create_enriches_exchange_from_catalog(
+    client: httpx.AsyncClient, db_session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """El cliente NO manda la bolsa: la resuelve el backend desde el catálogo local."""
+
+    await _seed_catalog(db_session_factory, "NVDA", ExchangeType.NASDAQ)
+    headers = await _register_and_login(client, "enrich1@example.com")
+
+    response = await client.post(
+        "/api/v1/watchlist",
+        json={"ticker": "nvda", "asset_type": "STOCK"},
+        headers=headers,
+    )
+
+    assert response.status_code == 201
+    assert response.json()["exchange"] == "NASDAQ"
+
+
+async def test_create_leaves_exchange_null_when_symbol_not_in_catalog(
+    client: httpx.AsyncClient,
+) -> None:
+    """Un símbolo fuera del catálogo (nunca sincronizado, o nuevo) se acepta con
+    `exchange = null` en vez de rechazarse — si no, un catálogo vacío rompería la watchlist.
+    """
+
+    headers = await _register_and_login(client, "enrich2@example.com")
+
+    response = await client.post(
+        "/api/v1/watchlist",
+        json={"ticker": "DESCONOCIDA", "asset_type": "STOCK"},
+        headers=headers,
+    )
+
+    assert response.status_code == 201
+    assert response.json()["exchange"] is None
+
+
+async def test_create_does_not_look_up_exchange_for_crypto(
+    client: httpx.AsyncClient, db_session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """Una cripto no cotiza en NASDAQ/NYSE: aunque exista un símbolo homónimo en el catálogo
+    de acciones, no se le asigna esa bolsa.
+    """
+
+    await _seed_catalog(db_session_factory, "BTC", ExchangeType.NYSE)
+    headers = await _register_and_login(client, "enrich3@example.com")
+
+    response = await client.post(
+        "/api/v1/watchlist",
+        json={"ticker": "BTC", "asset_type": "CRYPTO"},
+        headers=headers,
+    )
+
+    assert response.status_code == 201
+    assert response.json()["exchange"] is None
+
+
+async def test_list_watchlist_filters_by_exchange(
+    client: httpx.AsyncClient, db_session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    await _seed_catalog(db_session_factory, "NVDA", ExchangeType.NASDAQ)
+    await _seed_catalog(db_session_factory, "KO", ExchangeType.NYSE)
+    headers = await _register_and_login(client, "enrich4@example.com")
+
+    for symbol in ("NVDA", "KO"):
+        await client.post(
+            "/api/v1/watchlist",
+            json={"ticker": symbol, "asset_type": "STOCK"},
+            headers=headers,
+        )
+
+    nasdaq_only = await client.get(
+        "/api/v1/watchlist", params={"exchange": "NASDAQ"}, headers=headers
+    )
+    everything = await client.get("/api/v1/watchlist", headers=headers)
+
+    assert [item["ticker"] for item in nasdaq_only.json()] == ["NVDA"]
+    assert len(everything.json()) == 2  # sin filtro devuelve todo

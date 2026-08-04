@@ -12,7 +12,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.config import app_settings
 from app.core.database import Base
-from app.models.enums import AssetType
+from app.models.enums import AssetType, ExchangeType
 
 if TYPE_CHECKING:
     from app.models.user import User
@@ -39,6 +39,14 @@ class WatchlistItem(Base):
     )
     enable_beginner_mode: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
+    )
+
+    # Se completa automáticamente desde el catálogo `tickers` al crear el item (ver
+    # `app/api/v1/watchlist.py`) — el usuario no lo elige. Nullable a propósito: una cripto no
+    # cotiza en NASDAQ/NYSE, y una acción cuyo símbolo todavía no está en el catálogo (nunca se
+    # sincronizó, o es nuevo) se guarda sin bolsa en vez de rechazarse.
+    exchange: Mapped[ExchangeType | None] = mapped_column(
+        SAEnum(ExchangeType, native_enum=False, length=16), nullable=True
     )
 
     user: Mapped[User] = relationship("User", back_populates="watchlist_items")

@@ -36,6 +36,25 @@ class MarketSnapshot(BaseModel):
     day_change_pct: MetricValue
 
 
+class ReferenceTicker(BaseModel):
+    """Una entrada del catálogo de `/v3/reference/tickers` de Polygon, ya parseada pero sin
+    interpretar (.cursorrules §3). `primary_exchange` queda como el código MIC crudo que
+    devuelve el proveedor (`XNAS`, `XNYS`…): normalizarlo a la bolsa del producto es decisión
+    de la capa de aplicación (`app/services/ticker_catalog_service.py`), no de la ingesta.
+
+    `asset_type` mapea el campo `type` de Polygon (`CS`, `ETF`, `ADRC`…) — se renombra porque
+    `type` es builtin en Python, pero el valor no se toca.
+    """
+
+    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
+
+    symbol: str
+    name: str
+    primary_exchange: str | None
+    asset_type: str | None
+    active: bool
+
+
 class FilingReference(BaseModel):
     """Metadato de un filing SEC (10-K/10-Q), sin el contenido — el Nodo 2 decide si lo
     descarga e indexa.

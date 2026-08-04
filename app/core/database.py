@@ -37,6 +37,16 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
+def get_session_factory() -> async_sessionmaker[AsyncSession]:
+    """Para los servicios que manejan su propia transacción (varias, en el caso de la
+    sincronización del catálogo, que commitea por página) en vez de recibir una sesión ya
+    abierta como `get_db`. Es una dependencia de FastAPI y no `async_session_factory` directo
+    para que los tests puedan apuntarla a la base en memoria vía `dependency_overrides`.
+    """
+
+    return async_session_factory
+
+
 async def create_all_tables(bound_engine: AsyncEngine = engine) -> None:
     """Crea las tablas si no existen. Atajo cómodo para desarrollo/tests; en producción el
     esquema se gestiona con las migraciones versionadas de Alembic (`alembic/`,

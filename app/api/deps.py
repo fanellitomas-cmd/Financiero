@@ -8,15 +8,16 @@ from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import app_settings
-from app.core.database import get_db
+from app.core.database import get_db, get_session_factory
 from app.core.security import decode_access_token
 from app.models.user import User
 from app.services.agent_runner_service import AgentRunnerService
 from app.services.chat_service import ChatService
 from app.services.market_data_service import MarketDataService
+from app.services.ticker_catalog_service import TickerCatalogService
 
 _oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
@@ -116,3 +117,20 @@ def get_market_data_service(request: Request) -> MarketDataService:
 
 
 MarketData = Annotated[MarketDataService, Depends(get_market_data_service)]
+
+
+def get_ticker_catalog_service(
+    session_factory: Annotated[
+        async_sessionmaker[AsyncSession], Depends(get_session_factory)
+    ],
+) -> TickerCatalogService:
+    """A diferencia de los otros servicios, este no envuelve ningún cliente HTTP de larga vida
+    (solo consulta la DB local), así que se construye por request — es apenas una referencia al
+    session factory — y nunca puede fallar con 503 por falta de credenciales. El cliente de
+    Polygon solo aparece en la sincronización (`scripts/sync_tickers.py`), no acá.
+    """
+
+    return TickerCatalogService(session_factory)
+
+
+TickerCatalog = Annotated[TickerCatalogService, Depends(get_ticker_catalog_service)]

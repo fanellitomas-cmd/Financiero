@@ -28,6 +28,7 @@ class AppSettings(BaseSettings):
 
     asset_intelligence_max_age_minutes: int = 15
     alert_history_default_page_size: int = 20
+    ticker_default_page_size: int = 50
 
     # Clientes web (el cliente Flutter corriendo en modo web, cualquier frontend futuro) llegan
     # desde otro origen (puerto distinto al de la API) — sin CORS habilitado, el navegador

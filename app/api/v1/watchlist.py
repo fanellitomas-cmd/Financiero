@@ -4,12 +4,14 @@
 
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, TickerCatalog
+from app.models.enums import AssetType, ExchangeType
 from app.models.watchlist import WatchlistItem
 from app.schemas.watchlist import (
     WatchlistItemCreate,
@@ -22,17 +24,29 @@ router = APIRouter(prefix="/watchlist", tags=["watchlist"])
 
 @router.get("", response_model=list[WatchlistItemRead])
 async def list_watchlist(
-    current_user: CurrentUser, session: DbSession
+    current_user: CurrentUser,
+    session: DbSession,
+    exchange: Annotated[ExchangeType | None, Query()] = None,
 ) -> list[WatchlistItem]:
-    result = await session.scalars(
-        select(WatchlistItem).where(WatchlistItem.user_id == current_user.id)
-    )
+    """`exchange` opcional para que el cliente pueda mostrar solo la bolsa que el usuario
+    eligió. Sin el parámetro devuelve todo, incluidos los items sin bolsa resuelta (cripto y
+    símbolos fuera del catálogo) — filtrar es una decisión del cliente, no un default acá.
+    """
+
+    filters = [WatchlistItem.user_id == current_user.id]
+    if exchange is not None:
+        filters.append(WatchlistItem.exchange == exchange)
+
+    result = await session.scalars(select(WatchlistItem).where(*filters))
     return list(result.all())
 
 
 @router.post("", response_model=WatchlistItemRead, status_code=status.HTTP_201_CREATED)
 async def add_to_watchlist(
-    payload: WatchlistItemCreate, current_user: CurrentUser, session: DbSession
+    payload: WatchlistItemCreate,
+    current_user: CurrentUser,
+    session: DbSession,
+    catalog: TickerCatalog,
 ) -> WatchlistItem:
     existing = await session.scalar(
         select(WatchlistItem).where(
@@ -46,12 +60,24 @@ async def add_to_watchlist(
             detail=f"{payload.ticker.upper()} ya está en tu watchlist.",
         )
 
+    # La bolsa se resuelve acá desde el catálogo local, no se le pide al usuario. Que no
+    # aparezca NO es un error: una cripto nunca va a estar en el catálogo de acciones, y una
+    # acción cuyo símbolo todavía no se sincronizó tampoco. En esos casos el item se guarda con
+    # `exchange = None` en vez de rechazarse — si esto fuera un 404, un catálogo vacío (recién
+    # instalado, sin `sync_tickers` corrido) volvería inusable toda la watchlist.
+    exchange = (
+        await catalog.find_exchange(payload.ticker)
+        if payload.asset_type == AssetType.STOCK
+        else None
+    )
+
     item = WatchlistItem(
         user_id=current_user.id,
         ticker=payload.ticker.upper(),
         asset_type=payload.asset_type,
         alert_threshold_pct=payload.alert_threshold_pct,
         enable_beginner_mode=payload.enable_beginner_mode,
+        exchange=exchange,
     )
     session.add(item)
     await session.commit()

@@ -12,6 +12,7 @@ from app.api.v1 import (
     devices,
     internal,
     market,
+    tickers,
     watchlist,
     websocket,
 )
@@ -24,5 +25,6 @@ api_v1_router.include_router(alerts.router)
 api_v1_router.include_router(assets.router)
 api_v1_router.include_router(chat.router)
 api_v1_router.include_router(market.router)
+api_v1_router.include_router(tickers.router)
 api_v1_router.include_router(internal.router)
 api_v1_router.include_router(websocket.router)
