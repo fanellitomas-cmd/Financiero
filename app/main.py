@@ -23,6 +23,7 @@ from app.core.database import async_session_factory, create_all_tables, engine
 from app.services.agent_runner_service import AgentRunnerService
 from app.services.chat_service import ChatService
 from app.services.market_data_service import MarketDataService
+from app.services.market_summary_service import MarketSummaryService
 from app.services.push_service import PushNotificationService, TickerConnectionManager
 from app.services.scheduler import AgentScheduler
 from src.composition import build_ingestion_backed_dependencies
@@ -98,8 +99,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         )
         ingestion_clients.append(gemini)
 
+    market_data_service: MarketDataService | None = None
     if polygon is not None:
-        app.state.market_data_service = MarketDataService(polygon)
+        market_data_service = MarketDataService(polygon)
     else:
         logger.warning(
             "market_data_not_configured",
@@ -107,10 +109,50 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 "hint": "falta POLYGON_API_KEY; /api/v1/market/quotes devolverá 503"
             },
         )
-        app.state.market_data_service = None
+    app.state.market_data_service = market_data_service
+
+    # El resumen depende de Polygon para los datos duros y usa Gemini solo para la narrativa:
+    # con Polygon y sin Gemini el servicio se construye igual y sirve las alzas y bajas con
+    # `ai_narrative_available=False` (ver `market_summary_service.py`).
+    market_summary_service: MarketSummaryService | None = None
+    if polygon is not None:
+        market_summary_service = MarketSummaryService(
+            polygon,
+            async_session_factory,
+            gemini_client=gemini,
+            cache_ttl_seconds=app_settings.market_summary_cache_ttl_seconds,
+            movers_per_direction=app_settings.market_summary_movers_per_direction,
+        )
+        if gemini is None:
+            logger.warning(
+                "market_summary_narrative_not_configured",
+                extra={
+                    "hint": (
+                        "falta GEMINI_API_KEY; /api/v1/market/summary servirá alzas y bajas "
+                        "sin resumen de IA"
+                    )
+                },
+            )
+    else:
+        logger.warning(
+            "market_summary_not_configured",
+            extra={
+                "hint": "falta POLYGON_API_KEY; /api/v1/market/summary devolverá 503"
+            },
+        )
+    app.state.market_summary_service = market_summary_service
 
     if gemini is not None:
-        app.state.chat_service = ChatService(gemini, async_session_factory)
+        # `quote_provider`/`market_summary` son opcionales: le dan al chat la cotización en vivo
+        # del ticker preguntado y el estado general del mercado cuando no hay ticker. Si Polygon
+        # no está configurado quedan en None y el chat sigue respondiendo con lo que haya en la
+        # DB, declarando en el prompt que no tiene esos datos.
+        app.state.chat_service = ChatService(
+            gemini,
+            async_session_factory,
+            quote_provider=market_data_service,
+            market_summary=market_summary_service,
+        )
     else:
         logger.warning(
             "chat_not_configured",

@@ -36,6 +36,27 @@ class MarketSnapshot(BaseModel):
     day_change_pct: MetricValue
 
 
+class MarketMover(BaseModel):
+    """Una entrada de `/v2/snapshot/locale/us/markets/stocks/{gainers|losers}` de Polygon: un
+    ticker entre los que más subieron o bajaron en la jornada.
+
+    No trae bolsa: el endpoint de movers de Polygon devuelve el universo de acciones de US sin
+    decir en qué mercado cotiza cada símbolo. Resolver eso es decisión de la capa de aplicación
+    (`app/services/market_summary_service.py` lo cruza contra el catálogo local `Ticker`), no de
+    la ingesta (.cursorrules §3).
+
+    `last_price`/`day_change_pct` son `MetricValue` y no floats por la misma razón que en
+    `MarketSnapshot`: un mover al que el proveedor no le mandó precio tiene que poder decir
+    "no disponible" en vez de aparecer con un 0 que se lee como un dato real.
+    """
+
+    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
+
+    ticker: str
+    last_price: MetricValue
+    day_change_pct: MetricValue
+
+
 class ReferenceTicker(BaseModel):
     """Una entrada del catálogo de `/v3/reference/tickers` de Polygon, ya parseada pero sin
     interpretar (.cursorrules §3). `primary_exchange` queda como el código MIC crudo que

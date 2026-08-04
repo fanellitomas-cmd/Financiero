@@ -30,6 +30,12 @@ class AppSettings(BaseSettings):
     alert_history_default_page_size: int = 20
     ticker_default_page_size: int = 50
 
+    # El resumen de mercado es el mismo para todos los usuarios, así que se cachea en memoria:
+    # sin esto, cada apertura del Dashboard sería una llamada a Gemini. 15 minutos es del orden
+    # del intervalo del scheduler — el resumen no cambia de sentido en menos que eso.
+    market_summary_cache_ttl_seconds: float = 900.0
+    market_summary_movers_per_direction: int = 5
+
     # Clientes web (el cliente Flutter corriendo en modo web, cualquier frontend futuro) llegan
     # desde otro origen (puerto distinto al de la API) — sin CORS habilitado, el navegador
     # bloquea el preflight OPTIONS antes de que la request real salga (405 Method Not Allowed,

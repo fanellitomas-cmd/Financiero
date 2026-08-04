@@ -17,6 +17,7 @@ from app.models.user import User
 from app.services.agent_runner_service import AgentRunnerService
 from app.services.chat_service import ChatService
 from app.services.market_data_service import MarketDataService
+from app.services.market_summary_service import MarketSummaryService
 from app.services.ticker_catalog_service import TickerCatalogService
 
 _oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
@@ -117,6 +118,29 @@ def get_market_data_service(request: Request) -> MarketDataService:
 
 
 MarketData = Annotated[MarketDataService, Depends(get_market_data_service)]
+
+
+def get_market_summary_service(request: Request) -> MarketSummaryService:
+    """Igual que los demás servicios de larga vida: se construye una única vez en el lifespan.
+
+    El 503 acá es por falta de POLYGON_API_KEY, no de Gemini: sin datos de mercado el endpoint no
+    tiene nada que devolver, mientras que sin Gemini el servicio existe y sirve las alzas y bajas
+    sin narrativa (`ai_narrative_available=False`).
+    """
+
+    service = getattr(request.app.state, "market_summary_service", None)
+    if not isinstance(service, MarketSummaryService):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "El resumen de mercado no está configurado en este entorno "
+                "(falta POLYGON_API_KEY en .env)."
+            ),
+        )
+    return service
+
+
+MarketSummaryDep = Annotated[MarketSummaryService, Depends(get_market_summary_service)]
 
 
 def get_ticker_catalog_service(

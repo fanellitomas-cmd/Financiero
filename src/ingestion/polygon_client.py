@@ -16,6 +16,17 @@ Puntos concretos a confirmar contra una llamada real antes de producción:
     la apiKey — hay que reinyectarla en cada salto (se hace acá).
 Si el contrato real difiere, esto degrada a "ninguna página" o lanza `ProviderResponseError`;
 nunca inventa entradas de catálogo.
+
+Lo mismo aplica a `get_market_movers`
+(`/v2/snapshot/locale/us/markets/stocks/{gainers|losers}`), implementado contra la doc pública
+sin poder verificarlo en vivo. A confirmar antes de producción:
+  - La lista viene en la clave `tickers`, cada entrada con `ticker`, `todaysChangePerc` y el
+    precio de cierre del día en `day.c` (misma forma que el snapshot por ticker).
+  - El endpoint cubre el universo de acciones de US y NO dice en qué bolsa cotiza cada símbolo;
+    el filtro NASDAQ/NYSE se resuelve cruzando contra el catálogo local
+    (`app/services/market_summary_service.py`).
+Si el contrato difiere, esto degrada a lista vacía con log — el resumen de mercado dirá que no
+hay datos de movers, nunca inventará un ticker ni un porcentaje.
 """
 
 from __future__ import annotations
@@ -24,6 +35,7 @@ import logging
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
+from enum import Enum
 from types import TracebackType
 from typing import Any, Self
 
@@ -36,7 +48,7 @@ from src.core.exceptions import (
     ProviderTimeoutError,
 )
 from src.core.http_utils import request_with_retries
-from src.ingestion.schemas_raw import MarketSnapshot, ReferenceTicker
+from src.ingestion.schemas_raw import MarketMover, MarketSnapshot, ReferenceTicker
 from src.validation.domain_models import AssetClass, DataStatus, MetricValue
 
 logger = logging.getLogger(__name__)
@@ -102,6 +114,46 @@ def _parse_reference_ticker(entry: Any) -> ReferenceTicker | None:
         # Si el proveedor omite `active`, se asume activo: el pedido ya fue `active=true`, así
         # que su ausencia es un hueco del payload, no una señal de que esté delistado.
         active=raw_active if isinstance(raw_active, bool) else True,
+    )
+
+
+class MoverDirection(str, Enum):
+    """Las dos direcciones que acepta el endpoint de movers de Polygon. Enum y no string suelto
+    para que un typo (`"gainer"`) sea un error de tipos y no un 404 en runtime.
+    """
+
+    GAINERS = "gainers"
+    LOSERS = "losers"
+
+
+def _parse_market_mover(
+    entry: Any, *, source: str, fetched_at: datetime
+) -> MarketMover | None:
+    """Parsea una entrada de movers, o `None` si no tiene ticker — sin símbolo la entrada es
+    inútil, y descartarla es preferible a inventarle uno.
+    """
+
+    if not isinstance(entry, dict):
+        return None
+    ticker = _optional_str(entry.get("ticker"))
+    if not ticker:
+        return None
+
+    day = _nested_dict(entry, "day")
+    return MarketMover(
+        ticker=ticker,
+        last_price=_metric(
+            _to_decimal(day.get("c")),
+            status=DataStatus.OK,
+            source=source,
+            as_of=fetched_at,
+        ),
+        day_change_pct=_metric(
+            _to_decimal(entry.get("todaysChangePerc")),
+            status=DataStatus.OK,
+            source=source,
+            as_of=fetched_at,
+        ),
     )
 
 
@@ -219,6 +271,65 @@ class PolygonClient:
                 "polygon_ticker_pagination_cap_reached",
                 extra={"pages_seen": pages_seen},
             )
+
+    async def get_market_movers(self, direction: MoverDirection) -> list[MarketMover]:
+        """Los tickers que más subieron (`gainers`) o bajaron (`losers`) en la jornada, según
+        `/v2/snapshot/locale/us/markets/stocks/{direction}`.
+
+        Devuelve lista vacía ante cualquier fallo de proveedor o payload inesperado, en vez de
+        lanzar: el resumen de mercado que la consume tiene que poder decir "no hay datos de
+        alzas ahora" y seguir sirviendo el resto (.cursorrules §2). Un fallo acá se registra
+        explícito, no se traga en silencio.
+        """
+
+        path = f"/v2/snapshot/locale/us/markets/stocks/{direction.value}"
+        source = f"{_PROVIDER_NAME}{path}"
+        fetched_at = datetime.now(timezone.utc)
+
+        try:
+            response = await request_with_retries(
+                self._client,
+                "GET",
+                path,
+                provider=_PROVIDER_NAME,
+                max_attempts=self._max_retry_attempts,
+                params={"apiKey": self._api_key},
+            )
+        except (
+            ProviderTimeoutError,
+            ProviderRateLimitError,
+            ProviderAuthenticationError,
+            ProviderResponseError,
+        ) as exc:
+            logger.warning(
+                "polygon_market_movers_failed",
+                extra={"direction": direction.value, "error": str(exc)},
+            )
+            return []
+
+        try:
+            payload = response.json()
+        except ValueError:
+            logger.warning(
+                "polygon_market_movers_invalid_json",
+                extra={"direction": direction.value},
+            )
+            return []
+
+        raw_tickers = payload.get("tickers") if isinstance(payload, dict) else None
+        if not isinstance(raw_tickers, list):
+            logger.warning(
+                "polygon_market_movers_unexpected_payload",
+                extra={"direction": direction.value},
+            )
+            return []
+
+        movers: list[MarketMover] = []
+        for entry in raw_tickers:
+            mover = _parse_market_mover(entry, source=source, fetched_at=fetched_at)
+            if mover is not None:
+                movers.append(mover)
+        return movers
 
     async def get_equity_snapshot(self, ticker: str) -> MarketSnapshot:
         path = f"/v2/snapshot/locale/us/markets/stocks/tickers/{ticker}"

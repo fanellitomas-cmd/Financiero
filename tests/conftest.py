@@ -52,6 +52,7 @@ async def client(
     app.state.agent_runner_service = None
     app.state.chat_service = None
     app.state.market_data_service = None
+    app.state.market_summary_service = None
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(
