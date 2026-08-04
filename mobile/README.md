@@ -98,6 +98,33 @@ funcionalidad que directamente no está en el alcance actual del backend):
 |---|---|---|
 | Dashboard (daily digest) | Un resumen generado por el agente, expuesto por API | No existe ese concepto en el backend todavía — la card lo dice explícitamente |
 | Ficha de activo (chart) | Velas históricas OHLC reales | El chart usa datos de ejemplo, marcados en la UI (`GET /api/v1/assets/{ticker}` no incluye histórico de precios, solo el análisis) |
+| Preferencia de bolsa | Metadata de exchange por ticker | La preferencia ya se elige y persiste (ver abajo), pero **todavía no filtra nada**: el backend no sabe en qué bolsa cotiza cada ticker |
+
+### Preferencia de bolsa (NASDAQ / NYSE) — estado actual
+
+Implementado y funcionando: `ExchangeType` (`features/settings/data/`), persistencia en
+SharedPreferences (`core/storage/preferences_storage.dart`), `selectedExchangeProvider` +
+`exchangeControllerProvider` (`core/providers.dart`), diálogo de onboarding la primera vez
+(`ExchangeOnboardingDialog`, disparado desde `AppShell`) y selector rápido en el AppBar del
+Dashboard (`ExchangeSelector`).
+
+**Lo que todavía NO hace: filtrar tickers.** Filtrar requiere saber en qué bolsa cotiza cada
+ticker, y hoy ningún lado del sistema lo sabe — `WatchlistItem` (`app/models/watchlist.py`) es
+`ticker + asset_type + alert_threshold_pct + enable_beginner_mode`, sin exchange, y
+`GET /api/v1/market/quotes` tampoco lo devuelve.
+
+Deliberadamente **no** se hardcodeó un mapa ticker→bolsa en el cliente: sería inventar dato
+financiero (justo lo que prohíbe la regla de cero alucinación del proyecto), quedaría
+desactualizado solo, y no cubre casos reales como los dual-listed. Para cerrar esto hay dos
+caminos del lado del backend:
+
+1. **Guardar la bolsa al crear el item** — agregar `exchange` a `WatchlistItem` (+ migración
+   Alembic) y pedírselo al usuario en el diálogo de alta. Simple, y el dato lo aporta quien
+   sí lo sabe.
+2. **Resolverla desde el proveedor** — Polygon expone el campo `primary_exchange` en su
+   endpoint de detalle de ticker; se podría enriquecer `MarketDataService` para traerlo y
+   cachearlo. Más preciso y sin fricción para el usuario, pero es una llamada extra por
+   ticker.
 
 Ninguno bloquea correr la app — son placeholders explícitos, no funcionalidad rota.
 

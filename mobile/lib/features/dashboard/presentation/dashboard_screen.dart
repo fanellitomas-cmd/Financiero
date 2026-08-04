@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_error.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../settings/presentation/exchange_selector.dart';
 import '../../watchlist/data/watchlist_models.dart';
 import '../../watchlist/presentation/watchlist_controller.dart';
 import '../data/market_quote.dart';
@@ -30,7 +31,10 @@ class DashboardScreen extends ConsumerWidget {
     };
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Financiero')),
+      appBar: AppBar(
+        title: const Text('Financiero'),
+        actions: const [ExchangeSelector()],
+      ),
       body: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(watchlistProvider);

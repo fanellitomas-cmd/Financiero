@@ -6,10 +6,13 @@ import '../features/auth/data/auth_repository.dart';
 import '../features/auth/presentation/auth_controller.dart';
 import '../features/chat/data/chat_repository.dart';
 import '../features/dashboard/data/market_data_repository.dart';
+import '../features/settings/data/exchange_type.dart';
+import '../features/settings/presentation/exchange_controller.dart';
 import '../features/watchlist/data/watchlist_repository.dart';
 import 'config/app_config.dart';
 import 'network/api_client.dart';
 import 'push/push_service.dart';
+import 'storage/preferences_storage.dart';
 import 'storage/token_storage.dart';
 
 /// Todos los providers de infraestructura viven acá: cada uno se construye una sola vez por
@@ -20,6 +23,22 @@ import 'storage/token_storage.dart';
 final appConfigProvider = Provider<AppConfig>((ref) => AppConfig.defaultConfig);
 
 final tokenStorageProvider = Provider<TokenStorage>((ref) => TokenStorage());
+
+final preferencesStorageProvider = Provider<PreferencesStorage>(
+  (ref) => PreferencesStorage(),
+);
+
+final exchangeControllerProvider =
+    StateNotifierProvider<ExchangeController, ExchangePreferenceState>(
+  (ref) => ExchangeController(ref.watch(preferencesStorageProvider)),
+);
+
+/// Atajo de solo-lectura para las pantallas que únicamente necesitan saber qué bolsa está
+/// elegida (sin el estado de carga ni los métodos del controller) — `null` mientras no haya
+/// una selección. Para cambiarla, usar `exchangeControllerProvider.notifier.select(...)`.
+final selectedExchangeProvider = Provider<ExchangeType?>(
+  (ref) => ref.watch(exchangeControllerProvider).selected,
+);
 
 // Tipo explícito en la variable (no solo en el genérico del constructor): sin esto, el
 // analyzer detecta un ciclo de inferencia de tipos entre apiClientProvider ->

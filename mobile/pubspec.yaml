@@ -22,6 +22,11 @@ dependencies:
   # Persistencia segura del JWT
   flutter_secure_storage: ^9.2.2
 
+  # Preferencias no sensibles (bolsa elegida, etc.) — SharedPreferences en vez de
+  # flutter_secure_storage a propósito: el keychain/keystore es para secretos, no para
+  # settings de UI, y es más lento en cada lectura.
+  shared_preferences: ^2.3.3
+
   # WebSocket en tiempo real (/api/v1/ws/{ticker})
   web_socket_channel: ^3.0.1
 
