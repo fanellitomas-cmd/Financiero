@@ -8,6 +8,7 @@ import '../features/chat/data/chat_repository.dart';
 import '../features/dashboard/data/market_data_repository.dart';
 import '../features/settings/data/exchange_type.dart';
 import '../features/settings/presentation/exchange_controller.dart';
+import '../features/tickers/data/ticker_repository.dart';
 import '../features/watchlist/data/watchlist_repository.dart';
 import 'config/app_config.dart';
 import 'network/api_client.dart';
@@ -86,4 +87,8 @@ final alertsRepositoryProvider = Provider<AlertsRepository>(
 
 final marketDataRepositoryProvider = Provider<MarketDataRepository>(
   (ref) => MarketDataRepository(ref.watch(apiClientProvider)),
+);
+
+final tickerRepositoryProvider = Provider<TickerRepository>(
+  (ref) => TickerRepository(ref.watch(apiClientProvider)),
 );

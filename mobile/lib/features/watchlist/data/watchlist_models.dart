@@ -1,3 +1,5 @@
+import '../../settings/data/exchange_type.dart';
+
 enum AssetType { stock, crypto }
 
 extension AssetTypeJson on AssetType {
@@ -21,6 +23,7 @@ class WatchlistItem {
     required this.assetType,
     required this.alertThresholdPct,
     required this.enableBeginnerMode,
+    required this.exchange,
   });
 
   factory WatchlistItem.fromJson(Map<String, dynamic> json) => WatchlistItem(
@@ -29,6 +32,7 @@ class WatchlistItem {
         assetType: AssetTypeJson.fromJson(json['asset_type'] as String),
         alertThresholdPct: double.parse(json['alert_threshold_pct'].toString()),
         enableBeginnerMode: json['enable_beginner_mode'] as bool,
+        exchange: exchangeTypeFromWire(json['exchange'] as String?),
       );
 
   final String id;
@@ -36,4 +40,9 @@ class WatchlistItem {
   final AssetType assetType;
   final double alertThresholdPct;
   final bool enableBeginnerMode;
+
+  /// La resuelve el backend desde su catálogo al crear el item — el cliente no la manda.
+  /// `null` para cripto (no cotiza en una bolsa de acciones) y para símbolos que todavía no
+  /// están en el catálogo.
+  final ExchangeType? exchange;
 }

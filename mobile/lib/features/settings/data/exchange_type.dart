@@ -1,7 +1,10 @@
-/// Bolsa preferida del usuario. Por ahora es una preferencia 100% del cliente: el backend
-/// no tiene concepto de exchange en su esquema (`app/models/watchlist.py` guarda ticker +
-/// asset_type, sin la bolsa donde cotiza), así que no viaja en ningún request todavía. Ver
-/// `mobile/README.md` para lo que falta del lado del backend para poder filtrar por bolsa.
+/// Bolsa preferida del usuario. Se persiste local (`PreferencesStorage`) y viaja al backend
+/// como `?exchange=` en `GET /api/v1/watchlist` y `GET /api/v1/tickers`, que filtran por ella.
+///
+/// Solo tiene las dos bolsas que el producto ofrece elegir. El backend además maneja `OTHER`
+/// (NYSE Arca, NYSE American, Cboe… ver `ExchangeType` en `app/models/enums.py`): al parsear,
+/// ese valor cae en `null` vía `exchangeTypeFromWire` — no es un error, es un ticker de una
+/// bolsa que todavía no está en el selector.
 enum ExchangeType { nasdaq, nyse }
 
 extension ExchangeTypeX on ExchangeType {

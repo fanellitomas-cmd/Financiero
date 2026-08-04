@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_error.dart';
+import '../../../core/providers.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../settings/data/exchange_type.dart';
 import '../../settings/presentation/exchange_selector.dart';
 import '../../watchlist/data/watchlist_models.dart';
 import '../../watchlist/presentation/watchlist_controller.dart';
@@ -24,6 +26,7 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final watchlistAsync = ref.watch(watchlistProvider);
     final quotesAsync = ref.watch(marketQuotesProvider);
+    final selectedExchange = ref.watch(selectedExchangeProvider);
 
     final quotes = quotesAsync.valueOrNull;
     final quotesByTicker = <String, TickerQuote>{
@@ -45,11 +48,25 @@ class DashboardScreen extends ConsumerWidget {
           children: [
             const _DailyDigestCard(),
             const SizedBox(height: 24),
-            Text('Watchlist', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              // El título nombra la bolsa activa: el heatmap está filtrado por ella
+              // (`watchlistProvider` observa `selectedExchangeProvider`), y sin decirlo
+              // parecería que faltan activos.
+              selectedExchange == null
+                  ? 'Watchlist'
+                  : 'Watchlist · ${selectedExchange.displayName}',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 12),
             watchlistAsync.when(
               data: (items) => items.isEmpty
-                  ? const Text('Todavía no seguís ningún activo.')
+                  ? Text(
+                      selectedExchange == null
+                          ? 'Todavía no seguís ningún activo.'
+                          : 'No seguís ningún activo de '
+                              '${selectedExchange.displayName}.',
+                      style: const TextStyle(color: Colors.grey),
+                    )
                   : _HeatmapGrid(items: items, quotesByTicker: quotesByTicker),
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (error, stackTrace) => Text(describeApiError(error)),
