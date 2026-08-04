@@ -43,3 +43,18 @@ flutter:
   uses-material-design: true
   assets:
     - assets/charts/lightweight_chart.html
+  # Bundleada localmente (SIL Open Font License 1.1) para que la tipografía base de la app
+  # no dependa de bajar "Roboto" desde fonts.gstatic.com en el primer frame — en Web, sin un
+  # fontFamily local, CanvasKit intenta ese fetch y si la red lo bloquea el texto queda
+  # invisible sin ningún error visible. Liberation Sans es métricamente compatible con Arial.
+  fonts:
+    - family: AppSans
+      fonts:
+        - asset: assets/fonts/LiberationSans-Regular.ttf
+        - asset: assets/fonts/LiberationSans-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/LiberationSans-Italic.ttf
+          style: italic
+        - asset: assets/fonts/LiberationSans-BoldItalic.ttf
+          weight: 700
+          style: italic

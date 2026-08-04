@@ -170,7 +170,7 @@ class _UrgencyBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: color),
       ),
@@ -240,7 +240,7 @@ class _ScenarioBar extends StatelessWidget {
             child: LinearProgressIndicator(
               value: scenario.probabilityPct / 100,
               color: color,
-              backgroundColor: color.withOpacity(0.15),
+              backgroundColor: color.withValues(alpha: 0.15),
               minHeight: 6,
             ),
           ),

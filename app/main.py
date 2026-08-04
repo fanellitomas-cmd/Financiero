@@ -14,6 +14,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app import models as _models  # noqa: F401  registra las tablas en Base.metadata
 from app.api.v1.router import api_v1_router
@@ -174,6 +175,12 @@ def create_app() -> FastAPI:
         description="Backend de la plataforma: autenticación, watchlists y disparo del motor de LangGraph.",
         version="1.0.0",
         lifespan=lifespan,
+    )
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=app_settings.cors_allowed_origins,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
     application.include_router(api_v1_router)
     return application

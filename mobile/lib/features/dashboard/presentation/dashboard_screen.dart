@@ -39,7 +39,7 @@ class DashboardScreen extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            _DailyDigestCard(),
+            const _DailyDigestCard(),
             const SizedBox(height: 24),
             Text('Watchlist', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 12),
@@ -141,9 +141,9 @@ class _HeatmapTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       child: Container(
         decoration: BoxDecoration(
-          color: color.withOpacity(0.15),
+          color: color.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.4)),
+          border: Border.all(color: color.withValues(alpha: 0.4)),
         ),
         padding: const EdgeInsets.all(8),
         child: Column(

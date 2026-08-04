@@ -21,7 +21,13 @@ final appConfigProvider = Provider<AppConfig>((ref) => AppConfig.defaultConfig);
 
 final tokenStorageProvider = Provider<TokenStorage>((ref) => TokenStorage());
 
-final apiClientProvider = Provider<ApiClient>((ref) {
+// Tipo explícito en la variable (no solo en el genérico del constructor): sin esto, el
+// analyzer detecta un ciclo de inferencia de tipos entre apiClientProvider ->
+// authControllerProvider -> authRepositoryProvider -> apiClientProvider (el ciclo es real a
+// nivel de referencias en las clausuras, aunque en runtime nunca se ejecuta circularmente —
+// `onUnauthorized` recién llama a `authControllerProvider` ante un 401, mucho después de que
+// todos los providers ya se construyeron).
+final Provider<ApiClient> apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient(
     config: ref.watch(appConfigProvider),
     tokenStorage: ref.watch(tokenStorageProvider),

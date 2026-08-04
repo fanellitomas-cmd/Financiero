@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers.dart';
-import 'auth_controller.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -35,7 +34,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     if (!mounted) return;
     if (ref.read(authControllerProvider).isAuthenticated) {
-      await ref.read(pushServiceProvider).requestPermissionAndRegister();
+      try {
+        // Firebase puede no estar inicializado (falta `flutterfire configure`, o falló/
+        // colgó al cargar su SDK) — un usuario sin push configurado tiene que poder loguearse
+        // igual, así que esto se degrada en vez de dejar una excepción sin capturar.
+        await ref.read(pushServiceProvider).requestPermissionAndRegister();
+      } on Object catch (error) {
+        debugPrint('No se pudo registrar el token de push: $error');
+      }
     }
   }
 

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../asset_detail/data/push_notification_payload.dart';
 import '../data/alert_history_models.dart';
 import 'alerts_controller.dart';
 
@@ -123,7 +123,7 @@ class _AlertTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: color.withOpacity(0.15),
+          backgroundColor: color.withValues(alpha: 0.15),
           child: Text(
             item.ticker.substring(0, 1),
             style: TextStyle(color: color, fontWeight: FontWeight.bold),

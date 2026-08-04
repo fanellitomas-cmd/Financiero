@@ -29,5 +29,12 @@ class AppSettings(BaseSettings):
     asset_intelligence_max_age_minutes: int = 15
     alert_history_default_page_size: int = 20
 
+    # Clientes web (el cliente Flutter corriendo en modo web, cualquier frontend futuro) llegan
+    # desde otro origen (puerto distinto al de la API) — sin CORS habilitado, el navegador
+    # bloquea el preflight OPTIONS antes de que la request real salga (405 Method Not Allowed,
+    # nunca llega a la ruta). "*" es el default de desarrollo; restringir a dominios concretos
+    # en producción.
+    cors_allowed_origins: list[str] = ["*"]
+
 
 app_settings = AppSettings()

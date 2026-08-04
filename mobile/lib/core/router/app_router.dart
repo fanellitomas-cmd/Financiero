@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/alerts/presentation/alerts_screen.dart';
 import '../../features/asset_detail/presentation/asset_detail_screen.dart';
-import '../../features/auth/presentation/auth_controller.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/chat/presentation/chat_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';

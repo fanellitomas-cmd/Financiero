@@ -13,7 +13,12 @@ Future<void> main() async {
     // google-services.json/GoogleService-Info.plist ya agregados al proyecto nativo. Se
     // degrada explícito en vez de crashear: el resto de la app funciona sin push hasta que
     // Firebase esté configurado (ver app/core/config.py del lado del backend, mismo patrón).
-    await Firebase.initializeApp();
+    //
+    // El timeout es deliberado: en Web, `Firebase.initializeApp()` carga el SDK de Firebase
+    // desde un `<script>` externo (gstatic.com) — si esa red falla o cuelga (firewall,
+    // offline, CDN caído), la promesa de JS interop puede no resolver NUNCA, y sin timeout
+    // `runApp()` no se llama jamás y la app queda en blanco sin ningún error visible.
+    await Firebase.initializeApp().timeout(const Duration(seconds: 5));
   } on Object catch (error) {
     debugPrint('Firebase no inicializado: $error (¿falta flutterfire configure?)');
   }

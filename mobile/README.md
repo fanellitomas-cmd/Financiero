@@ -4,20 +4,20 @@ Cliente iOS/Android/Web de Financiero: dashboard con heatmap en vivo, chat conve
 el agente, ficha de inteligencia profunda por activo (con chart estilo TradingView) y
 watchlist con centro de notificaciones nativas.
 
-> **Nota sobre este código**: se escribió en un entorno remoto sin el SDK de Flutter instalado,
-> así que nunca se corrió `flutter pub get` / `flutter analyze` / `flutter test` acá — no hay
-> forma de verificarlo en esta sesión. Está escrito con cuidado contra las APIs conocidas de
-> cada paquete, pero corré `flutter analyze` apenas lo bajes, antes de asumir que compila.
+> **Verificado corriendo de punta a punta** (Flutter 3.44.8 estable, build web): `flutter
+> analyze` limpio, y la app se corrió contra el backend real — registro/login, alta/edición/
+> borrado de watchlist, heatmap, chat y centro de notificaciones, todos probados con
+> screenshots reales. `android/`/`ios/` no se generaron en esta sesión (solo se necesitaba
+> `web` para probar) — correr `flutter create --platforms=android,ios .` para agregarlos.
 
 ## Setup inicial
 
-Este directorio ya tiene `pubspec.yaml` y todo `lib/` — le faltan los proyectos nativos
-(`android/`, `ios/`, `web/`, etc.), que `flutter create` genera sin tocar `lib/`/`pubspec.yaml`
-si ya existen:
+Este directorio ya tiene `pubspec.yaml`, `lib/`, `web/` y las fuentes bundleadas en
+`assets/fonts/`. Si necesitás además los proyectos nativos de Android/iOS:
 
 ```bash
 cd mobile
-flutter create --org com.financiero --project-name financiero_app .
+flutter create --platforms=android,ios --org com.financiero --project-name financiero_app .
 flutter pub get
 ```
 
@@ -100,3 +100,32 @@ funcionalidad que directamente no está en el alcance actual del backend):
 | Ficha de activo (chart) | Velas históricas OHLC reales | El chart usa datos de ejemplo, marcados en la UI (`GET /api/v1/assets/{ticker}` no incluye histórico de precios, solo el análisis) |
 
 Ninguno bloquea correr la app — son placeholders explícitos, no funcionalidad rota.
+
+## Notas de la corrida de verificación (build web)
+
+Corriendo la app real (`flutter build web` + servida localmente, contra el backend con
+`uvicorn`) aparecieron 2 bugs reales que no se veían por análisis estático — quedaron
+arreglados en `app/` y `mobile/lib/`:
+
+- **Faltaba CORS en el backend**: sin `CORSMiddleware`, el navegador bloquea el preflight
+  `OPTIONS` antes de que la request real (`POST /auth/register`, etc.) llegue a salir — 405
+  Method Not Allowed, la app nunca se entera de la causa real. Fix: `app/core/config.py`
+  (`cors_allowed_origins`) + `app/main.py` (`CORSMiddleware`).
+- **`PushService.requestPermissionAndRegister()` sin try/catch** en el login: si Firebase no
+  está configurado (o su SDK no carga), tiraba una excepción sin capturar que se veía en la
+  consola del navegador. Fix en `login_screen.dart`.
+
+También, específico de Web: por default Flutter Web baja el motor CanvasKit y la tipografía
+Roboto desde CDNs de Google en el primer frame. Si esas redes están bloqueadas (firewall
+corporativo, red restringida), la app queda con pantalla en blanco o texto invisible sin
+ningún error visible. Dos fixes permanentes en el repo:
+- `assets/fonts/` bundlea Liberation Sans (SIL OFL, métricamente compatible con Arial) como
+  fuente base de la app (`AppTheme`) — nunca depende de Google Fonts.
+- `web/index.html` define `window.flutterConfiguration.canvasKitBaseUrl` para preferir el
+  CanvasKit local que ya viene en `build/web/canvaskit/`.
+
+Si tu red bloquea `gstatic.com` y ves que la app sigue intentando bajar CanvasKit del CDN a
+pesar de eso, el fix que efectivamente lo evita es pasar `config: { canvasKitBaseUrl:
+"canvaskit/" }` al `_flutter.loader.load(...)` de `build/web/flutter_bootstrap.js` (se
+regenera en cada build, así que hay que volver a aplicarlo) — no fue necesario commitear esto
+porque en una red sin esa restricción `flutter build web` funciona sin tocar nada.
