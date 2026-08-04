@@ -1,10 +1,10 @@
-"""Schemas de los endpoints de `/api/v1/market`: `quotes` (Heatmap del Dashboard) y `summary`
-(Resumen Diario del Mercado).
+"""Schemas de los endpoints de `/api/v1/market`: `quotes` (Heatmap del Dashboard), `summary`
+(Resumen Diario del Mercado) y `history/{ticker}` (velas OHLC para el chart de la Ficha).
 """
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -74,4 +74,45 @@ class MarketSummary(BaseModel):
     ai_narrative_available: bool = False
     market_data_available: bool = False
     served_from_cache: bool = False
+    degradation_reason: str | None = None
+
+
+class OhlcBarOut(BaseModel):
+    """Una vela del histórico, en el formato compacto que espera un chart: `{t, o, h, l, c, v}`.
+
+    Nombres de un solo carácter a propósito — es la convención de las librerías de charting
+    (Lightweight Charts, fl_chart, TradingView) y en un payload de 30+ velas la diferencia de
+    tamaño se nota. Los nombres largos viven en el modelo de ingesta
+    (`src/ingestion/schemas_raw.py::OhlcBar`), que es donde importa la legibilidad.
+
+    `t` en milisegundos, tal como lo devuelve Polygon. `o`/`h`/`l`/`c`/`v` van como `float` y no
+    `Decimal` porque son coordenadas de un gráfico, no montos sobre los que se calcule: acá la
+    precisión exacta no aporta y el JSON queda más chico.
+    """
+
+    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
+
+    t: int
+    o: float
+    h: float
+    l: float
+    c: float
+    v: float
+
+
+class TickerHistory(BaseModel):
+    """Respuesta de `GET /api/v1/market/history/{ticker}`.
+
+    `bars` vacío es una respuesta válida con 200, no un error: el proveedor puede estar caído, sin
+    configurar, o el rango puede no tener datos (fin de semana, ticker delistado). El cliente
+    dibuja "sin histórico" y el resto de la Ficha sigue funcionando. `degradation_reason` dice cuál
+    de esos casos fue, para no dejar al usuario adivinando.
+    """
+
+    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
+
+    ticker: str
+    start: date
+    end: date
+    bars: list[OhlcBarOut] = Field(default_factory=list)
     degradation_reason: str | None = None

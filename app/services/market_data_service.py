@@ -1,21 +1,33 @@
-"""Servicio de precios en vivo para el Heatmap del Dashboard (Pantalla 1): envuelve
-`PolygonClient.get_equity_snapshot`/`get_crypto_snapshot` (el mismo cliente que usa el Nodo 1
-del motor, reutilizado — no uno nuevo) para exponer precio y % de variación del día de cada
-ticker, sin pasar por la detección de alertas del Nodo 1 (que solo devuelve algo si se cruza
-un umbral) — el Heatmap necesita el dato siempre, haya o no alerta.
+"""Servicio de datos de mercado que consume la app, sobre el mismo `PolygonClient` que usa el
+Nodo 1 del motor (reutilizado, no uno nuevo):
+
+  - `get_quotes` — precio y % de variación del día por ticker, para el Heatmap del Dashboard. No
+    pasa por la detección de alertas del Nodo 1 (que solo devuelve algo si se cruza un umbral):
+    el Heatmap necesita el dato siempre, haya o no alerta.
+  - `get_history` — velas diarias OHLC para el chart de la Ficha.
+
+Las dos degradan sin lanzar: `get_quotes` tile-por-tile (un proveedor caído para UN ticker no
+tumba el heatmap entero) y `get_history` con `bars` vacío más un motivo legible.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import date
 
 from app.models.enums import AssetType
-from app.schemas.market import TickerQuote
+from app.schemas.market import OhlcBarOut, TickerHistory, TickerQuote
 from src.ingestion.polygon_client import PolygonClient
 from src.validation.domain_models import DataStatus
 
 logger = logging.getLogger(__name__)
+
+_REASON_NO_BARS = (
+    "No hay velas históricas para este rango (el proveedor no devolvió datos: puede ser un "
+    "rango sin ruedas, un ticker sin histórico, o falta POLYGON_API_KEY en .env)."
+)
+_REASON_PROVIDER_FAILED = "No se pudo obtener el histórico de precios en este momento."
 
 
 class MarketDataService:
@@ -60,4 +72,60 @@ class MarketDataService:
             if snapshot.day_change_pct.value is not None
             else None,
             status=snapshot.last_price.status,
+        )
+
+    async def get_history(
+        self, ticker: str, *, start: date, end: date
+    ) -> TickerHistory:
+        """Velas diarias OHLC para el chart de la Ficha.
+
+        Nunca lanza y nunca devuelve un error HTTP: `bars` vacío con `degradation_reason` es la
+        respuesta cuando el proveedor falla o el rango no tiene datos. El chart es una parte de la
+        Ficha, no la Ficha entera — un histórico ausente no debe tumbar la pantalla (.cursorrules §2).
+        """
+
+        normalized = ticker.upper()
+        try:
+            bars = await self._polygon_client.get_daily_ohlc(
+                normalized, start=start, end=end
+            )
+        except Exception as exc:  # noqa: BLE001 — `get_daily_ohlc` ya degrada sus propios
+            # errores de proveedor a lista vacía sin lanzar; esto es una red de seguridad ante un
+            # bug inesperado, no el camino esperado, y se registra explícito.
+            logger.warning(
+                "market_history_failed",
+                extra={"ticker": normalized, "error": str(exc)},
+            )
+            return TickerHistory(
+                ticker=normalized,
+                start=start,
+                end=end,
+                bars=[],
+                degradation_reason=_REASON_PROVIDER_FAILED,
+            )
+
+        if not bars:
+            return TickerHistory(
+                ticker=normalized,
+                start=start,
+                end=end,
+                bars=[],
+                degradation_reason=_REASON_NO_BARS,
+            )
+
+        return TickerHistory(
+            ticker=normalized,
+            start=start,
+            end=end,
+            bars=[
+                OhlcBarOut(
+                    t=bar.timestamp_ms,
+                    o=float(bar.open),
+                    h=float(bar.high),
+                    l=float(bar.low),
+                    c=float(bar.close),
+                    v=float(bar.volume),
+                )
+                for bar in bars
+            ],
         )

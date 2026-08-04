@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/alerts/data/alerts_repository.dart';
 import '../features/asset_detail/data/asset_repository.dart';
+import '../features/asset_detail/data/history_repository.dart';
 import '../features/auth/data/auth_repository.dart';
 import '../features/auth/presentation/auth_controller.dart';
 import '../features/chat/data/chat_repository.dart';
@@ -81,6 +82,10 @@ final chatRepositoryProvider = Provider<ChatRepository>(
 
 final assetRepositoryProvider = Provider<AssetRepository>(
   (ref) => AssetRepository(ref.watch(apiClientProvider)),
+);
+
+final historyRepositoryProvider = Provider<HistoryRepository>(
+  (ref) => HistoryRepository(ref.watch(apiClientProvider)),
 );
 
 final alertsRepositoryProvider = Provider<AlertsRepository>(

@@ -7,6 +7,7 @@ explícitamente ausencia de dato campo por campo, en vez de rellenar con un valo
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -34,6 +35,29 @@ class MarketSnapshot(BaseModel):
     prev_close: MetricValue
     volume: MetricValue
     day_change_pct: MetricValue
+
+
+class OhlcBar(BaseModel):
+    """Una vela de `/v2/aggs/ticker/{ticker}/range/...` de Polygon: apertura, máximo, mínimo,
+    cierre y volumen de un período.
+
+    A diferencia de `MarketSnapshot`, acá los campos son `Decimal` planos y no `MetricValue`: una
+    vela a la que le falte un precio no es una vela degradada, es una vela inválida — no se puede
+    dibujar ni escalar el eje con un hueco. El parseo descarta la entrada incompleta en vez de
+    propagarla con nulls (ver `_parse_ohlc_bar`), así que todo lo que sale de acá ya está completo.
+
+    `timestamp_ms` queda en milisegundos, como lo manda el proveedor: convertirlo a segundos o a
+    `datetime` es decisión de la capa que lo consume, no de la ingesta (.cursorrules §3).
+    """
+
+    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
+
+    timestamp_ms: int
+    open: Decimal
+    high: Decimal
+    low: Decimal
+    close: Decimal
+    volume: Decimal
 
 
 class MarketMover(BaseModel):

@@ -40,7 +40,9 @@ Después:
    Simulator o Web usar `localhost` directo; en un dispositivo físico, la IP de la red local.)
 3. **Probar el flujo completo**: registrate/logueate en la app, agregá un ticker a la
    Watchlist (botón `+`), y desde ahí:
-   - Tocalo para abrir la Ficha (`GET /api/v1/assets/{ticker}` on-demand + WebSocket en vivo).
+   - Tocalo para abrir la Ficha (`GET /api/v1/assets/{ticker}` on-demand + WebSocket en vivo),
+     con el chart de velas OHLC de los últimos 30 días (`GET /api/v1/market/history/{ticker}`).
+     Tocá o pasá el mouse por una vela para ver su tooltip con apertura/máximo/mínimo/cierre.
    - Usá el ícono de campana en el AppBar de Watchlist para ver el Centro de Notificaciones
      (`GET /api/v1/alerts`, paginado).
    - Probá el ícono de lápiz en un item de la Watchlist para editar umbral/modo principiante
@@ -75,7 +77,8 @@ lib/
                       #   card de Resumen del día (MarketSummaryRepository -> GET /market/summary)
     chat/            # Pantalla 2: chat multiticker (ChatRepository -> POST /chat),
                       #   con chatTickerProvider para el activo vinculado
-    asset_detail/    # Pantalla 3: ficha on-demand (AssetRepository) + WebSocket en vivo + chart
+    asset_detail/    # Pantalla 3: ficha on-demand (AssetRepository) + WebSocket en vivo +
+                      #   chart de velas nativo (HistoryRepository -> GET /market/history)
     alerts/          # Centro de Notificaciones: AlertsRepository -> GET /alerts, paginado
     watchlist/        # Pantalla 4: CRUD completo de watchlist, incluye PATCH
 ```
@@ -97,14 +100,26 @@ que recargar.
 
 Todos los endpoints que bloqueaban las pantallas existen y el cliente está conectado a ellos:
 `GET /assets/{ticker}`, `GET /alerts`, `POST /chat`, `PATCH /watchlist/{id}`,
-`GET /market/quotes`, `GET /tickers` y `GET /market/summary`.
+`GET /market/quotes`, `GET /tickers`, `GET /market/summary` y `GET /market/history/{ticker}`.
 
-Lo que sigue faltando del lado del backend:
+No quedan gaps de endpoints que bloqueen pantallas.
 
-| Pantalla | Falta | Detalle |
-|---|---|---|
-| Ficha de activo (chart) | Velas históricas OHLC reales | El chart usa datos de ejemplo, marcados en la UI (`GET /api/v1/assets/{ticker}` no incluye histórico de precios, solo el análisis) |
-| Ficha de activo (chart, web/desktop) | Un chart que no dependa de `webview_flutter` | `webview_flutter` solo soporta android/ios/macos; en Web, Linux y Windows la ficha muestra un placeholder temado en vez del gráfico |
+### Chart de velas
+
+`fl_chart` (`CandlestickChart`), Flutter puro: se renderiza igual en mobile, web y escritorio y no
+toca la red. Reemplazó una versión basada en `webview_flutter` + Lightweight Charts que tenía dos
+problemas de fondo — `webview_flutter` solo declara android/ios/macos (en Web, Linux y Windows
+pintaba un bloque gris sin estilo), y la librería JS se bajaba de unpkg en cada arranque.
+
+Detalles del comportamiento:
+- El eje X usa el **índice** de la vela, no el timestamp: así los fines de semana y feriados no
+  dejan huecos vacíos, que es la convención de cualquier chart financiero.
+- El eje Y se escala sobre `low`/`high` (no sobre los cierres, que recortarían las mechas) con un
+  5% de margen, y no dibuja las etiquetas de los extremos porque ese margen es artificial.
+- Verde esmeralda / rojo coral por vela, los mismos tokens de dirección que el resto de la app.
+- Sin histórico, el área del chart muestra el motivo que devuelve el backend y el resto de la
+  Ficha sigue intacta: `GET /market/history/{ticker}` responde **200 con `bars: []`** cuando el
+  proveedor falla, está bloqueado o el rango no tiene ruedas.
 
 ### Preferencia de bolsa (NASDAQ / NYSE)
 

@@ -1,9 +1,6 @@
 import 'package:financiero_app/core/theme/app_theme.dart';
-import 'package:financiero_app/features/asset_detail/widgets/lightweight_chart_view.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:webview_flutter/webview_flutter.dart';
 
 /// Los tokens del sistema de diseño se testean por valor exacto a propósito: son un contrato
 /// acordado con diseño, y un cambio accidental (un color pisado, un radio distinto) es
@@ -94,54 +91,6 @@ void main() {
       final theme = AppTheme.dark;
       expect(theme.inputDecorationTheme.filled, isTrue);
       expect(theme.inputDecorationTheme.fillColor, AppTheme.surfaceSunken);
-    });
-  });
-
-  /// El chart vive en un WebView y `webview_flutter` solo declara android/ios/macos. En Web,
-  /// Linux y Windows `WebViewWidget` pinta un bloque gris claro que ignora el alto del padre
-  /// y rompe el tema; el guard de plataforma es lo único que lo evita, así que se testea.
-  group('LightweightChartView', () {
-    tearDown(() => debugDefaultTargetPlatformOverride = null);
-
-    testWidgets('en una plataforma sin WebView muestra el placeholder del tema',
-        (tester) async {
-      // El override se limpia acá adentro y no en `tearDown`: `testWidgets` verifica que las
-      // variables de debug de foundation queden en null al terminar el cuerpo del test, o sea
-      // ANTES de que corran los teardowns. El `finally` cubre el caso de un expect que falle.
-      debugDefaultTargetPlatformOverride = TargetPlatform.linux;
-      try {
-        expect(LightweightChartView.isSupportedPlatform, isFalse);
-        await tester.pumpWidget(
-          const MaterialApp(
-            home: Scaffold(
-              body: SizedBox(
-                height: 260,
-                child: LightweightChartView(candles: []),
-              ),
-            ),
-          ),
-        );
-
-        expect(find.byType(WebViewWidget), findsNothing);
-        expect(find.textContaining('app móvil'), findsOneWidget);
-      } finally {
-        debugDefaultTargetPlatformOverride = null;
-      }
-    });
-
-    test('android/ios/macos sí montan el WebView', () {
-      for (final platform in [
-        TargetPlatform.android,
-        TargetPlatform.iOS,
-        TargetPlatform.macOS,
-      ]) {
-        debugDefaultTargetPlatformOverride = platform;
-        expect(
-          LightweightChartView.isSupportedPlatform,
-          isTrue,
-          reason: '$platform debería soportar el WebView',
-        );
-      }
     });
   });
 }

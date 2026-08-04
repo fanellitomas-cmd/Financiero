@@ -5,7 +5,7 @@ import '../../../core/network/api_error.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../watchlist/data/watchlist_models.dart';
 import '../data/push_notification_payload.dart';
-import '../widgets/lightweight_chart_view.dart';
+import '../widgets/ticker_history_chart.dart';
 import 'asset_detail_controller.dart';
 
 /// Pantalla 3 en mobile: la Ficha como pantalla completa, navegada por `/asset/:ticker`. En
@@ -36,8 +36,9 @@ class AssetDetailScreen extends StatelessWidget {
 /// y el WebSocket en vivo (`tickerPayloadProvider`, para reflejar al toque una alerta nueva
 /// mientras la ficha ya está abierta). El WS tiene prioridad cuando ambos tienen datos.
 ///
-/// El chart todavía no tiene una fuente de velas históricas real — se ve con datos de
-/// ejemplo, marcados explícitamente en la UI, hasta que el backend exponga ese endpoint.
+/// El chart de velas sale de `GET /api/v1/market/history/{ticker}` y se dibuja con `fl_chart`
+/// (Flutter puro, se ve igual en mobile, web y escritorio). Se degrada por su cuenta: si no hay
+/// histórico, muestra el motivo y el resto de la Ficha sigue intacta.
 class AssetDetailView extends ConsumerStatefulWidget {
   const AssetDetailView(
       {super.key, required this.ticker, required this.assetType});
@@ -119,13 +120,6 @@ class _AssetDetailBody extends StatelessWidget {
   final bool showBeginner;
   final ValueChanged<bool> onToggleBeginner;
 
-  static const _sampleCandles = [
-    Candle(time: 1706227200, open: 100, high: 104, low: 98, close: 102),
-    Candle(time: 1706313600, open: 102, high: 108, low: 101, close: 106),
-    Candle(time: 1706400000, open: 106, high: 107, low: 99, close: 101),
-    Candle(time: 1706486400, open: 101, high: 110, low: 100, close: 109),
-  ];
-
   @override
   Widget build(BuildContext context) {
     final narrative =
@@ -147,18 +141,7 @@ class _AssetDetailBody extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        SizedBox(
-          height: 260,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: const LightweightChartView(candles: _sampleCandles),
-          ),
-        ),
-        const SizedBox(height: 4),
-        const Text(
-          'Datos de ejemplo — falta el endpoint de velas históricas (ver TODO arriba).',
-          style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
-        ),
+        TickerHistoryChart(ticker: payload.ticker),
         const SizedBox(height: 20),
         Text(narrative.headline, style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 8),

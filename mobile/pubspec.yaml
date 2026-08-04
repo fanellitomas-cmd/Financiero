@@ -31,13 +31,12 @@ dependencies:
   web_socket_channel: ^3.0.1
 
   # Chart estilo TradingView: Lightweight Charts es una lib JS, se embebe vía WebView
-  webview_flutter: ^4.10.0
-
   # Push notifications nativas (FCM)
   firebase_core: ^3.8.0
   firebase_messaging: ^15.1.5
 
   intl: ^0.19.0
+  fl_chart: ^1.2.0
 
 dev_dependencies:
   flutter_test:
@@ -46,8 +45,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  assets:
-    - assets/charts/lightweight_chart.html
+  # Ya no hay `assets:`: el único que había era el HTML del chart embebido en un WebView, que
+  # quedó obsoleto al pasar a `fl_chart` (Flutter puro, sin recursos externos).
   # Bundleada localmente (SIL Open Font License 1.1) para que la tipografía base de la app
   # no dependa de bajar "Roboto" desde fonts.gstatic.com en el primer frame — en Web, sin un
   # fontFamily local, CanvasKit intenta ese fetch y si la red lo bloquea el texto queda

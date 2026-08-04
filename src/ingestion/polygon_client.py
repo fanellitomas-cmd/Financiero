@@ -27,13 +27,23 @@ sin poder verificarlo en vivo. A confirmar antes de producción:
     (`app/services/market_summary_service.py`).
 Si el contrato difiere, esto degrada a lista vacía con log — el resumen de mercado dirá que no
 hay datos de movers, nunca inventará un ticker ni un porcentaje.
+
+Y a `get_daily_ohlc` (`/v2/aggs/ticker/{ticker}/range/1/day/{from}/{to}`), en las mismas
+condiciones. A confirmar antes de producción:
+  - Las velas vienen en la clave `results`, cada una con `t` (timestamp en MILISEGUNDOS), `o`,
+    `h`, `l`, `c`, `v`.
+  - Un rango sin datos responde 200 con `resultsCount: 0` y sin `results` — eso se trata como
+    histórico vacío, no como error.
+  - `adjusted=true` ajusta por splits. Sin eso, un split 10:1 se dibuja como una caída del 90%
+    que nunca ocurrió.
+Si el contrato difiere, degrada a lista vacía y el chart lo dice; nunca inventa una vela.
 """
 
 from __future__ import annotations
 
 import logging
 from collections.abc import AsyncIterator
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from enum import Enum
 from types import TracebackType
@@ -48,7 +58,12 @@ from src.core.exceptions import (
     ProviderTimeoutError,
 )
 from src.core.http_utils import request_with_retries
-from src.ingestion.schemas_raw import MarketMover, MarketSnapshot, ReferenceTicker
+from src.ingestion.schemas_raw import (
+    MarketMover,
+    MarketSnapshot,
+    OhlcBar,
+    ReferenceTicker,
+)
 from src.validation.domain_models import AssetClass, DataStatus, MetricValue
 
 logger = logging.getLogger(__name__)
@@ -115,6 +130,37 @@ def _parse_reference_ticker(entry: Any) -> ReferenceTicker | None:
         # que su ausencia es un hueco del payload, no una señal de que esté delistado.
         active=raw_active if isinstance(raw_active, bool) else True,
     )
+
+
+def _parse_ohlc_bar(entry: Any) -> OhlcBar | None:
+    """Parsea una vela de agregados, o `None` si le falta cualquier campo.
+
+    Todo-o-nada, a diferencia del resto del cliente: una vela sin `h` o sin `c` no se puede
+    dibujar ni usar para escalar el eje, y rellenar el hueco con 0 dibujaría una mecha falsa que
+    se lee como un movimiento real. Descartarla deja un salto en el eje temporal, que es honesto.
+    """
+
+    if not isinstance(entry, dict):
+        return None
+
+    timestamp = entry.get("t")
+    if not isinstance(timestamp, (int, float)):
+        return None
+
+    values: dict[str, Decimal] = {}
+    for key, field in (
+        ("o", "open"),
+        ("h", "high"),
+        ("l", "low"),
+        ("c", "close"),
+        ("v", "volume"),
+    ):
+        value = _to_decimal(entry.get(key))
+        if value is None:
+            return None
+        values[field] = value
+
+    return OhlcBar(timestamp_ms=int(timestamp), **values)
 
 
 class MoverDirection(str, Enum):
@@ -271,6 +317,83 @@ class PolygonClient:
                 "polygon_ticker_pagination_cap_reached",
                 extra={"pages_seen": pages_seen},
             )
+
+    async def get_daily_ohlc(
+        self, ticker: str, *, start: date, end: date, limit: int = 5000
+    ) -> list[OhlcBar]:
+        """Velas diarias de `/v2/aggs/ticker/{ticker}/range/1/day/{start}/{end}`, ordenadas de la
+        más vieja a la más nueva.
+
+        Devuelve lista vacía ante cualquier fallo de proveedor o payload inesperado, en vez de
+        lanzar: un chart sin datos tiene que poder decir "no hay histórico" y dejar el resto de la
+        Ficha intacta (.cursorrules §2).
+
+        `adjusted=true` a propósito: sin ajustar por splits, un split 10:1 aparece como una caída
+        del 90% que nunca ocurrió.
+        """
+
+        path = f"/v2/aggs/ticker/{ticker}/range/1/day/{start.isoformat()}/{end.isoformat()}"
+
+        try:
+            response = await request_with_retries(
+                self._client,
+                "GET",
+                path,
+                provider=_PROVIDER_NAME,
+                max_attempts=self._max_retry_attempts,
+                params={
+                    "apiKey": self._api_key,
+                    "adjusted": "true",
+                    "sort": "asc",
+                    "limit": limit,
+                },
+            )
+        except (
+            ProviderTimeoutError,
+            ProviderRateLimitError,
+            ProviderAuthenticationError,
+            ProviderResponseError,
+        ) as exc:
+            logger.warning(
+                "polygon_daily_ohlc_failed",
+                extra={"ticker": ticker, "error": str(exc)},
+            )
+            return []
+
+        try:
+            payload = response.json()
+        except ValueError:
+            logger.warning("polygon_daily_ohlc_invalid_json", extra={"ticker": ticker})
+            return []
+
+        raw_results = payload.get("results") if isinstance(payload, dict) else None
+        if raw_results is None:
+            # `resultsCount: 0` sin `results` es la respuesta normal de Polygon para un rango sin
+            # datos (fin de semana, ticker delistado): no es un error, es un histórico vacío.
+            return []
+        if not isinstance(raw_results, list):
+            logger.warning(
+                "polygon_daily_ohlc_unexpected_payload", extra={"ticker": ticker}
+            )
+            return []
+
+        bars: list[OhlcBar] = []
+        for entry in raw_results:
+            bar = _parse_ohlc_bar(entry)
+            if bar is not None:
+                bars.append(bar)
+
+        discarded = len(raw_results) - len(bars)
+        if discarded:
+            logger.warning(
+                "polygon_daily_ohlc_incomplete_bars_discarded",
+                extra={"ticker": ticker, "discarded": discarded},
+            )
+
+        # Se reordena en vez de confiar en `sort=asc`: el contrato del proveedor no se pudo
+        # verificar en vivo, y un chart con las velas desordenadas dibuja un garabato.
+        bars.sort(key=lambda bar: bar.timestamp_ms)
+        return bars
 
     async def get_market_movers(self, direction: MoverDirection) -> list[MarketMover]:
         """Los tickers que más subieron (`gainers`) o bajaron (`losers`) en la jornada, según
