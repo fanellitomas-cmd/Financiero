@@ -45,9 +45,14 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),
         routes: [
-          GoRoute(path: '/dashboard', builder: (context, state) => const DashboardScreen()),
-          GoRoute(path: '/chat', builder: (context, state) => const ChatScreen()),
-          GoRoute(path: '/watchlist', builder: (context, state) => const WatchlistScreen()),
+          GoRoute(
+              path: '/dashboard',
+              builder: (context, state) => const DashboardScreen()),
+          GoRoute(
+              path: '/chat', builder: (context, state) => const ChatScreen()),
+          GoRoute(
+              path: '/watchlist',
+              builder: (context, state) => const WatchlistScreen()),
         ],
       ),
       GoRoute(
@@ -64,7 +69,8 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
-      GoRoute(path: '/alerts', builder: (context, state) => const AlertsScreen()),
+      GoRoute(
+          path: '/alerts', builder: (context, state) => const AlertsScreen()),
     ],
   );
 });

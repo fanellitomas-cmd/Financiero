@@ -47,7 +47,8 @@ class ScenarioOutcome {
     required this.rationale,
   });
 
-  factory ScenarioOutcome.fromJson(Map<String, dynamic> json) => ScenarioOutcome(
+  factory ScenarioOutcome.fromJson(Map<String, dynamic> json) =>
+      ScenarioOutcome(
         label: scenarioLabelFromJson(json['label'] as String),
         probabilityPct: double.parse(json['probability_pct'].toString()),
         rationale: json['rationale'] as String,
@@ -65,10 +66,12 @@ class HorizonScenarios {
     required this.confidenceLevel,
   });
 
-  factory HorizonScenarios.fromJson(Map<String, dynamic> json) => HorizonScenarios(
+  factory HorizonScenarios.fromJson(Map<String, dynamic> json) =>
+      HorizonScenarios(
         horizon: horizonFromJson(json['horizon'] as String),
         scenarios: (json['scenarios'] as List)
-            .map((item) => ScenarioOutcome.fromJson(item as Map<String, dynamic>))
+            .map((item) =>
+                ScenarioOutcome.fromJson(item as Map<String, dynamic>))
             .toList(),
         confidenceLevel: json['confidence_level'] as String,
       );
@@ -81,9 +84,11 @@ class HorizonScenarios {
 class AssetProjection {
   const AssetProjection({required this.horizons, required this.classification});
 
-  factory AssetProjection.fromJson(Map<String, dynamic> json) => AssetProjection(
+  factory AssetProjection.fromJson(Map<String, dynamic> json) =>
+      AssetProjection(
         horizons: (json['horizons'] as List)
-            .map((item) => HorizonScenarios.fromJson(item as Map<String, dynamic>))
+            .map((item) =>
+                HorizonScenarios.fromJson(item as Map<String, dynamic>))
             .toList(),
         classification: json['classification'] as String,
       );
@@ -93,9 +98,11 @@ class AssetProjection {
 }
 
 class AnalysisNarrative {
-  const AnalysisNarrative({required this.headline, required this.horizonExplanations});
+  const AnalysisNarrative(
+      {required this.headline, required this.horizonExplanations});
 
-  factory AnalysisNarrative.fromJson(Map<String, dynamic> json) => AnalysisNarrative(
+  factory AnalysisNarrative.fromJson(Map<String, dynamic> json) =>
+      AnalysisNarrative(
         headline: json['headline'] as String,
         horizonExplanations: (json['horizon_explanations'] as List? ?? [])
             .map((item) => item as String)
@@ -130,16 +137,17 @@ class PushNotificationPayload {
         ticker: json['ticker'] as String,
         title: json['title'] as String,
         shortSummary: json['short_summary'] as String,
-        technicalNarrative:
-            AnalysisNarrative.fromJson(json['technical_narrative'] as Map<String, dynamic>),
-        beginnerNarrative:
-            AnalysisNarrative.fromJson(json['beginner_narrative'] as Map<String, dynamic>),
+        technicalNarrative: AnalysisNarrative.fromJson(
+            json['technical_narrative'] as Map<String, dynamic>),
+        beginnerNarrative: AnalysisNarrative.fromJson(
+            json['beginner_narrative'] as Map<String, dynamic>),
         defaultViewIsBeginner: json['default_view'] == 'beginner',
         urgencyLevel: alertUrgencyFromJson(json['urgency_level'] as String),
         timestamp: DateTime.parse(json['timestamp'] as String),
         fullAnalysis: json['full_analysis_json'] == null
             ? null
-            : AssetProjection.fromJson(json['full_analysis_json'] as Map<String, dynamic>),
+            : AssetProjection.fromJson(
+                json['full_analysis_json'] as Map<String, dynamic>),
       );
 
   final String notificationId;

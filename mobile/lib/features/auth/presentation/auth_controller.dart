@@ -15,7 +15,8 @@ class AuthState {
   final bool isLoading;
   final String? errorMessage;
 
-  AuthState copyWith({bool? isAuthenticated, bool? isLoading, String? errorMessage}) =>
+  AuthState copyWith(
+          {bool? isAuthenticated, bool? isLoading, String? errorMessage}) =>
       AuthState(
         isAuthenticated: isAuthenticated ?? this.isAuthenticated,
         isLoading: isLoading ?? this.isLoading,
@@ -52,7 +53,8 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
-  Future<void> register({required String email, required String password}) async {
+  Future<void> register(
+      {required String email, required String password}) async {
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
       await _authRepository.register(email: email, password: password);

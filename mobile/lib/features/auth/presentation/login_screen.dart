@@ -79,7 +79,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   if (authState.errorMessage != null) ...[
                     Text(
                       authState.errorMessage!,
-                      style: TextStyle(color: Theme.of(context).colorScheme.error),
+                      style:
+                          TextStyle(color: Theme.of(context).colorScheme.error),
                     ),
                     const SizedBox(height: 12),
                   ],
@@ -94,7 +95,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         : Text(_isRegisterMode ? 'Crear cuenta' : 'Ingresar'),
                   ),
                   TextButton(
-                    onPressed: () => setState(() => _isRegisterMode = !_isRegisterMode),
+                    onPressed: () =>
+                        setState(() => _isRegisterMode = !_isRegisterMode),
                     child: Text(
                       _isRegisterMode
                           ? '¿Ya tenés cuenta? Ingresá'

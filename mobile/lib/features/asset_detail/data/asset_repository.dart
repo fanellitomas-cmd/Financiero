@@ -21,6 +21,7 @@ class AssetRepository {
       '/assets/${ticker.toUpperCase()}',
       queryParameters: {'asset_type': assetType.toJson()},
     );
-    return PushNotificationPayload.fromJson(response.data as Map<String, dynamic>);
+    return PushNotificationPayload.fromJson(
+        response.data as Map<String, dynamic>);
   }
 }

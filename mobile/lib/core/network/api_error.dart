@@ -7,10 +7,9 @@ import 'package:dio/dio.dart';
 String describeApiError(Object error) {
   if (error is DioException) {
     final responseData = error.response?.data;
-    final detail =
-        responseData is Map && responseData['detail'] is String
-            ? responseData['detail'] as String
-            : null;
+    final detail = responseData is Map && responseData['detail'] is String
+        ? responseData['detail'] as String
+        : null;
     if (detail != null) return detail;
 
     final statusCode = error.response?.statusCode;

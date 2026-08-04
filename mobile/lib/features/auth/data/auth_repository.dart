@@ -8,7 +8,8 @@ class AuthRepository {
   final ApiClient _apiClient;
   final TokenStorage _tokenStorage;
 
-  Future<void> register({required String email, required String password}) async {
+  Future<void> register(
+      {required String email, required String password}) async {
     await _apiClient.dio.post(
       '/auth/register',
       data: {'email': email, 'password': password},
@@ -26,5 +27,6 @@ class AuthRepository {
 
   Future<void> logout() => _tokenStorage.clear();
 
-  Future<bool> isAuthenticated() async => (await _tokenStorage.readAccessToken()) != null;
+  Future<bool> isAuthenticated() async =>
+      (await _tokenStorage.readAccessToken()) != null;
 }

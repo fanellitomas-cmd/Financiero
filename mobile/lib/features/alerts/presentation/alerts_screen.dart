@@ -45,7 +45,9 @@ class AlertsScreen extends ConsumerWidget {
             children: [
               Text(state.errorMessage!, textAlign: TextAlign.center),
               const SizedBox(height: 12),
-              FilledButton(onPressed: controller.refresh, child: const Text('Reintentar')),
+              FilledButton(
+                  onPressed: controller.refresh,
+                  child: const Text('Reintentar')),
             ],
           ),
         ),
@@ -53,7 +55,8 @@ class AlertsScreen extends ConsumerWidget {
     }
 
     if (state.items.isEmpty) {
-      return const Center(child: Text('Todavía no hay alertas para tu watchlist.'));
+      return const Center(
+          child: Text('Todavía no hay alertas para tu watchlist.'));
     }
 
     return ListView.builder(
@@ -81,7 +84,8 @@ class _FooterLoadMore extends StatelessWidget {
       return const Padding(
         padding: EdgeInsets.all(16),
         child: Center(
-          child: Text('No hay más notificaciones.', style: TextStyle(color: Colors.grey)),
+          child: Text('No hay más notificaciones.',
+              style: TextStyle(color: Colors.grey)),
         ),
       );
     }

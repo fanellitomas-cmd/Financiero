@@ -20,7 +20,8 @@ Future<void> main() async {
     // `runApp()` no se llama jamás y la app queda en blanco sin ningún error visible.
     await Firebase.initializeApp().timeout(const Duration(seconds: 5));
   } on Object catch (error) {
-    debugPrint('Firebase no inicializado: $error (¿falta flutterfire configure?)');
+    debugPrint(
+        'Firebase no inicializado: $error (¿falta flutterfire configure?)');
   }
 
   runApp(const ProviderScope(child: FinancieroApp()));

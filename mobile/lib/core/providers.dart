@@ -62,7 +62,8 @@ final pushServiceProvider = Provider<PushService>(
 );
 
 final authRepositoryProvider = Provider<AuthRepository>(
-  (ref) => AuthRepository(ref.watch(apiClientProvider), ref.watch(tokenStorageProvider)),
+  (ref) => AuthRepository(
+      ref.watch(apiClientProvider), ref.watch(tokenStorageProvider)),
 );
 
 final authControllerProvider = StateNotifierProvider<AuthController, AuthState>(

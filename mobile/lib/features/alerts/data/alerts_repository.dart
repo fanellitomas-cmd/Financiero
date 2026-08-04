@@ -8,7 +8,8 @@ class AlertsRepository {
 
   final ApiClient _apiClient;
 
-  Future<AlertHistoryPage> list({required int limit, required int offset}) async {
+  Future<AlertHistoryPage> list(
+      {required int limit, required int offset}) async {
     final response = await _apiClient.dio.get(
       '/alerts',
       queryParameters: {'limit': limit, 'offset': offset},

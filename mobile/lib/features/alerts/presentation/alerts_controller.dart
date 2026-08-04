@@ -72,7 +72,8 @@ class AlertsController extends StateNotifier<AlertsState> {
         hasMore: items.length < page.total,
       );
     } on Object catch (error) {
-      state = state.copyWith(isLoading: false, errorMessage: describeApiError(error));
+      state = state.copyWith(
+          isLoading: false, errorMessage: describeApiError(error));
     }
   }
 

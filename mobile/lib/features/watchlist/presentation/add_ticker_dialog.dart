@@ -42,7 +42,8 @@ class _AddTickerDialogState extends ConsumerState<AddTickerDialog> {
     super.dispose();
   }
 
-  Future<void> _submit({required String ticker, required AssetType assetType}) async {
+  Future<void> _submit(
+      {required String ticker, required AssetType assetType}) async {
     if (_isSubmitting) return;
     setState(() {
       _isSubmitting = true;
@@ -105,7 +106,8 @@ class _AddTickerDialogState extends ConsumerState<AddTickerDialog> {
                 decoration: const InputDecoration(
                   labelText: 'Símbolo de la cripto',
                   hintText: 'ej: BTC-USD, ETH-USD',
-                  helperText: 'Las criptos no cotizan en una bolsa de acciones.',
+                  helperText:
+                      'Las criptos no cotizan en una bolsa de acciones.',
                 ),
                 onSubmitted: (value) => _submitCrypto(),
               ),

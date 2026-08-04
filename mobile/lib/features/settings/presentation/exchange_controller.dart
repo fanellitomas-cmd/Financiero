@@ -6,9 +6,11 @@ import '../data/exchange_type.dart';
 
 @immutable
 class ExchangePreferenceState {
-  const ExchangePreferenceState({required this.selected, required this.isLoading});
+  const ExchangePreferenceState(
+      {required this.selected, required this.isLoading});
 
-  static const initial = ExchangePreferenceState(selected: null, isLoading: true);
+  static const initial =
+      ExchangePreferenceState(selected: null, isLoading: true);
 
   final ExchangeType? selected;
   final bool isLoading;

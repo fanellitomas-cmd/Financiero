@@ -14,7 +14,8 @@ import '../data/watchlist_models.dart';
 /// Watchlist siempre ven una lista fresca al volver a entrar en vez de un caché viejo.
 /// Después de un `add`/`remove`, quien llame debe `ref.invalidate(watchlistProvider)` para
 /// refrescar — ver `watchlist_screen.dart`.
-final watchlistProvider = FutureProvider.autoDispose<List<WatchlistItem>>((ref) {
+final watchlistProvider =
+    FutureProvider.autoDispose<List<WatchlistItem>>((ref) {
   final exchange = ref.watch(selectedExchangeProvider);
   return ref.watch(watchlistRepositoryProvider).list(exchange: exchange);
 });

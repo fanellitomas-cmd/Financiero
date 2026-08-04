@@ -53,11 +53,13 @@ class WatchlistRepository {
       data: {
         if (alertThresholdPct != null)
           'alert_threshold_pct': alertThresholdPct.toString(),
-        if (enableBeginnerMode != null) 'enable_beginner_mode': enableBeginnerMode,
+        if (enableBeginnerMode != null)
+          'enable_beginner_mode': enableBeginnerMode,
       },
     );
     return WatchlistItem.fromJson(response.data as Map<String, dynamic>);
   }
 
-  Future<void> remove(String itemId) => _apiClient.dio.delete('/watchlist/$itemId');
+  Future<void> remove(String itemId) =>
+      _apiClient.dio.delete('/watchlist/$itemId');
 }

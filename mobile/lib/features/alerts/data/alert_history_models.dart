@@ -12,7 +12,8 @@ class AlertHistoryItem {
     required this.createdAt,
   });
 
-  factory AlertHistoryItem.fromJson(Map<String, dynamic> json) => AlertHistoryItem(
+  factory AlertHistoryItem.fromJson(Map<String, dynamic> json) =>
+      AlertHistoryItem(
         id: json['id'] as String,
         ticker: json['ticker'] as String,
         payloadJson: json['payload_json'] as Map<String, dynamic>,
@@ -38,9 +39,11 @@ class AlertHistoryPage {
     required this.offset,
   });
 
-  factory AlertHistoryPage.fromJson(Map<String, dynamic> json) => AlertHistoryPage(
+  factory AlertHistoryPage.fromJson(Map<String, dynamic> json) =>
+      AlertHistoryPage(
         items: (json['items'] as List)
-            .map((item) => AlertHistoryItem.fromJson(item as Map<String, dynamic>))
+            .map((item) =>
+                AlertHistoryItem.fromJson(item as Map<String, dynamic>))
             .toList(),
         total: json['total'] as int,
         limit: json['limit'] as int,

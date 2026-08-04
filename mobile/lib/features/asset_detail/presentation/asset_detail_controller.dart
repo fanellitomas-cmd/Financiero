@@ -27,5 +27,7 @@ final tickerPayloadProvider = StreamProvider.autoDispose
 final assetIntelligenceProvider = FutureProvider.autoDispose
     .family<PushNotificationPayload, (String, AssetType)>((ref, args) {
   final (ticker, assetType) = args;
-  return ref.watch(assetRepositoryProvider).getAssetIntelligence(ticker, assetType);
+  return ref
+      .watch(assetRepositoryProvider)
+      .getAssetIntelligence(ticker, assetType);
 });

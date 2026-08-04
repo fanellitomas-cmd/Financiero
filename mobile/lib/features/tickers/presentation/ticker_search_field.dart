@@ -104,7 +104,8 @@ class _Results extends StatelessWidget {
       // Distinguir "no hay resultados" de "el catálogo está vacío" es clave: sin el sync
       // corrido (`scripts/sync_tickers.py`) TODA búsqueda vuelve vacía, y sin este texto
       // parecería que el buscador está roto.
-      final scope = filterExchange != null ? ' en ${filterExchange!.displayName}' : '';
+      final scope =
+          filterExchange != null ? ' en ${filterExchange!.displayName}' : '';
       return _Hint(
         text: 'Sin resultados para "$query"$scope.\n'
             'Si el catálogo nunca se sincronizó en el backend, todas las búsquedas '
@@ -166,7 +167,8 @@ class _ExchangeBadge extends StatelessWidget {
       ),
       child: Text(
         ticker.exchangeLabel,
-        style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold),
+        style:
+            TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold),
       ),
     );
   }

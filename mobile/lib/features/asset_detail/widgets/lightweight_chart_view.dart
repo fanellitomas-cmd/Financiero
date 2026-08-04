@@ -65,7 +65,8 @@ class _LightweightChartViewState extends State<LightweightChartView> {
   }
 
   void _pushData() {
-    final payload = jsonEncode(widget.candles.map((candle) => candle.toJson()).toList());
+    final payload =
+        jsonEncode(widget.candles.map((candle) => candle.toJson()).toList());
     _controller.runJavaScript('window.setSeriesData($payload);');
   }
 
