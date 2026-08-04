@@ -14,15 +14,18 @@ import '../../settings/presentation/exchange_selector.dart';
 import '../../watchlist/data/watchlist_models.dart';
 import '../../watchlist/presentation/watchlist_controller.dart';
 import '../data/market_quote.dart';
+import '../widgets/market_summary_card.dart';
 import 'market_quotes_controller.dart';
+import 'market_summary_controller.dart';
 
-/// Pantalla 1: Home / Dashboard Macro. Heatmap de la Watchlist (con precio/%var en vivo de
-/// `GET /api/v1/market/quotes`) + Daily Digest del agente.
+/// Pantalla 1: Home / Dashboard Macro. Resumen Diario del agente arriba
+/// (`GET /api/v1/market/summary`) y heatmap de la Watchlist debajo, con precio/%var en vivo de
+/// `GET /api/v1/market/quotes`.
 ///
-/// TODO(backend): el Daily Digest todavía no tiene un endpoint propio — no hay un concepto de
-/// "resumen generado por el agente" expuesto en `app/api/v1/` todavía. El heatmap sí es real:
-/// usa la Watchlist para saber qué tickers mostrar y `/market/quotes` para el precio/%var,
-/// degradando tile-por-tile (no toda la pantalla) si un proveedor falla para un ticker puntual.
+/// Las dos secciones degradan por separado y de forma independiente: el heatmap se degrada
+/// tile-por-tile si un proveedor falla para un ticker puntual, y la card del resumen muestra los
+/// movers aunque falte la narrativa del modelo (ver `MarketSummaryCard`). Un fallo de una no
+/// vacía la otra.
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
@@ -48,11 +51,14 @@ class DashboardScreen extends ConsumerWidget {
           onRefresh: () async {
             ref.invalidate(watchlistProvider);
             ref.invalidate(marketQuotesProvider);
+            // El resumen entra en el refresh: el backend lo tiene cacheado, así que volver a
+            // pedirlo no gasta una llamada al modelo mientras el TTL siga vigente.
+            ref.invalidate(marketSummaryProvider);
           },
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              const _DailyDigestCard(),
+              const MarketSummaryCard(),
               const SizedBox(height: 24),
               Text(
                 // El título nombra la bolsa activa: el heatmap está filtrado por ella
@@ -90,32 +96,6 @@ class DashboardScreen extends ConsumerWidget {
           ),
         ),
         detail: const AssetDetailPanel(),
-      ),
-    );
-  }
-}
-
-class _DailyDigestCard extends StatelessWidget {
-  const _DailyDigestCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Resumen del día',
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            const Text(
-              'El Daily Digest generado por el agente todavía no tiene un endpoint en el '
-              'backend — placeholder hasta que se agregue.',
-              style: TextStyle(color: AppTheme.textMuted),
-            ),
-          ],
-        ),
       ),
     );
   }

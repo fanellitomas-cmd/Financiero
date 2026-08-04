@@ -47,8 +47,13 @@ Después:
      (`PATCH /api/v1/watchlist/{id}`).
    - En el Dashboard, el heatmap debería mostrar %var en vivo (`GET /api/v1/market/quotes`) si
      `POLYGON_API_KEY` está configurada.
-   - En Chat, elegí un ticker de tu Watchlist en el dropdown y preguntale algo — la respuesta
-     viene de Gemini con contexto del último `AlertHistory` de ese ticker, si existe.
+   - Arriba del Dashboard, la card de **Resumen del día** (`GET /api/v1/market/summary`): subas y
+     bajas de la jornada más el resumen ejecutivo del agente. Si falta `GEMINI_API_KEY`, la card
+     muestra igual los movers con un aviso explicando qué falta — no se esconde.
+   - En Chat, el chip de la cabecera dice sobre qué activo estás conversando. Se hereda de la
+     selección (tocar un activo en la Watchlist o en el heatmap), se puede cambiar tocándolo, y
+     la X lo desvincula para preguntar sobre el mercado en general. Con ticker el backend inyecta
+     cotización en vivo + bolsa + último análisis; sin ticker, las alzas y bajas del día.
 
 ## Arquitectura
 
@@ -66,8 +71,10 @@ lib/
     providers.dart    # todos los providers de infraestructura, un único lugar
   features/
     auth/            # login/registro, AuthController (sesión)
-    dashboard/        # Pantalla 1: heatmap en vivo (MarketDataRepository) + daily digest
-    chat/            # Pantalla 2: chat conversacional (ChatRepository -> POST /chat)
+    dashboard/        # Pantalla 1: heatmap en vivo (MarketDataRepository) +
+                      #   card de Resumen del día (MarketSummaryRepository -> GET /market/summary)
+    chat/            # Pantalla 2: chat multiticker (ChatRepository -> POST /chat),
+                      #   con chatTickerProvider para el activo vinculado
     asset_detail/    # Pantalla 3: ficha on-demand (AssetRepository) + WebSocket en vivo + chart
     alerts/          # Centro de Notificaciones: AlertsRepository -> GET /alerts, paginado
     watchlist/        # Pantalla 4: CRUD completo de watchlist, incluye PATCH
@@ -88,45 +95,38 @@ que recargar.
 
 ## Gaps conocidos del backend
 
-La tabla de gaps que bloqueaba las 4 pantallas está **cerrada**: los 5 endpoints que faltaban
-(`GET /assets/{ticker}`, `GET /alerts`, `POST /chat`, `PATCH /watchlist/{id}`,
-`GET /market/quotes`) ya existen en `app/api/v1/` y el cliente está conectado a los cinco. Lo
-único que sigue siendo un placeholder explícito en la UI (no un endpoint faltante, una
-funcionalidad que directamente no está en el alcance actual del backend):
+Todos los endpoints que bloqueaban las pantallas existen y el cliente está conectado a ellos:
+`GET /assets/{ticker}`, `GET /alerts`, `POST /chat`, `PATCH /watchlist/{id}`,
+`GET /market/quotes`, `GET /tickers` y `GET /market/summary`.
+
+Lo que sigue faltando del lado del backend:
 
 | Pantalla | Falta | Detalle |
 |---|---|---|
-| Dashboard (daily digest) | Un resumen generado por el agente, expuesto por API | No existe ese concepto en el backend todavía — la card lo dice explícitamente |
 | Ficha de activo (chart) | Velas históricas OHLC reales | El chart usa datos de ejemplo, marcados en la UI (`GET /api/v1/assets/{ticker}` no incluye histórico de precios, solo el análisis) |
-| Preferencia de bolsa | Metadata de exchange por ticker | La preferencia ya se elige y persiste (ver abajo), pero **todavía no filtra nada**: el backend no sabe en qué bolsa cotiza cada ticker |
+| Ficha de activo (chart, web/desktop) | Un chart que no dependa de `webview_flutter` | `webview_flutter` solo soporta android/ios/macos; en Web, Linux y Windows la ficha muestra un placeholder temado en vez del gráfico |
 
-### Preferencia de bolsa (NASDAQ / NYSE) — estado actual
+### Preferencia de bolsa (NASDAQ / NYSE)
 
-Implementado y funcionando: `ExchangeType` (`features/settings/data/`), persistencia en
-SharedPreferences (`core/storage/preferences_storage.dart`), `selectedExchangeProvider` +
-`exchangeControllerProvider` (`core/providers.dart`), diálogo de onboarding la primera vez
-(`ExchangeOnboardingDialog`, disparado desde `AppShell`) y selector rápido en el AppBar del
-Dashboard (`ExchangeSelector`).
+Cerrado de punta a punta. El cliente elige y persiste la bolsa (`ExchangeType` en
+`features/settings/data/`, SharedPreferences vía `core/storage/preferences_storage.dart`,
+`selectedExchangeProvider` + `exchangeControllerProvider`), con onboarding la primera vez
+(`ExchangeOnboardingDialog`, disparado desde `AppShell`) y selector en el AppBar
+(`ExchangeSelector`).
 
-**Lo que todavía NO hace: filtrar tickers.** Filtrar requiere saber en qué bolsa cotiza cada
-ticker, y hoy ningún lado del sistema lo sabe — `WatchlistItem` (`app/models/watchlist.py`) es
-`ticker + asset_type + alert_threshold_pct + enable_beginner_mode`, sin exchange, y
-`GET /api/v1/market/quotes` tampoco lo devuelve.
+Del lado del backend existe el catálogo `Ticker` (sincronizado desde
+`/v3/reference/tickers` de Polygon, normalizando el código MIC `XNAS`/`XNYS` a la bolsa del
+producto), y `WatchlistItem.exchange` se enriquece solo al dar de alta un activo. La bolsa
+elegida viaja como `?exchange=` a `GET /api/v1/watchlist` y `GET /api/v1/tickers`, así que la
+Watchlist, el heatmap y el buscador del diálogo de alta quedan filtrados.
 
-Deliberadamente **no** se hardcodeó un mapa ticker→bolsa en el cliente: sería inventar dato
-financiero (justo lo que prohíbe la regla de cero alucinación del proyecto), quedaría
-desactualizado solo, y no cubre casos reales como los dual-listed. Para cerrar esto hay dos
-caminos del lado del backend:
-
-1. **Guardar la bolsa al crear el item** — agregar `exchange` a `WatchlistItem` (+ migración
-   Alembic) y pedírselo al usuario en el diálogo de alta. Simple, y el dato lo aporta quien
-   sí lo sabe.
-2. **Resolverla desde el proveedor** — Polygon expone el campo `primary_exchange` en su
-   endpoint de detalle de ticker; se podría enriquecer `MarketDataService` para traerlo y
-   cachearlo. Más preciso y sin fricción para el usuario, pero es una llamada extra por
-   ticker.
-
-Ninguno bloquea correr la app — son placeholders explícitos, no funcionalidad rota.
+Dos semánticas que vale tener presentes al leer la UI:
+- Las **criptos siempre se ven** con un filtro de bolsa activo: no cotizan en una bolsa de
+  acciones, así que esconderlas sería perder un dato del usuario. Una acción con `exchange`
+  nulo (todavía no sincronizada en el catálogo) **sí** se esconde: ahí la bolsa existe y no se
+  conoce.
+- La Watchlist avisa cuántos activos quedaron ocultos por el filtro, para que una lista vacía
+  no parezca que se borraron los datos.
 
 ## Notas de la corrida de verificación (build web)
 
