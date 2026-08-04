@@ -281,3 +281,67 @@ async def test_list_watchlist_filters_by_exchange(
 
     assert [item["ticker"] for item in nasdaq_only.json()] == ["NVDA"]
     assert len(everything.json()) == 2  # sin filtro devuelve todo
+
+
+async def test_crypto_stays_visible_under_any_exchange_filter(
+    client: httpx.AsyncClient, db_session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """Una cripto no cotiza en NASDAQ ni en NYSE, así que el filtro de bolsa no se le aplica:
+    esconderla sería tratar "sin bolsa" como si fuera "otra bolsa", y alguien que sigue BTC lo
+    vería desaparecer al elegir una bolsa.
+    """
+
+    await _seed_catalog(db_session_factory, "NVDA", ExchangeType.NASDAQ)
+    await _seed_catalog(db_session_factory, "KO", ExchangeType.NYSE)
+    headers = await _register_and_login(client, "cripto-visible@example.com")
+
+    for payload in (
+        {"ticker": "NVDA", "asset_type": "STOCK"},
+        {"ticker": "KO", "asset_type": "STOCK"},
+        {"ticker": "BTC-USD", "asset_type": "CRYPTO"},
+        {"ticker": "ETH-USD", "asset_type": "CRYPTO"},
+    ):
+        await client.post("/api/v1/watchlist", json=payload, headers=headers)
+
+    nasdaq = await client.get(
+        "/api/v1/watchlist", params={"exchange": "NASDAQ"}, headers=headers
+    )
+    nyse = await client.get(
+        "/api/v1/watchlist", params={"exchange": "NYSE"}, headers=headers
+    )
+
+    # La acción de la bolsa elegida + las dos criptos, en los dos casos.
+    assert sorted(item["ticker"] for item in nasdaq.json()) == [
+        "BTC-USD",
+        "ETH-USD",
+        "NVDA",
+    ]
+    assert sorted(item["ticker"] for item in nyse.json()) == [
+        "BTC-USD",
+        "ETH-USD",
+        "KO",
+    ]
+
+
+async def test_stock_without_resolved_exchange_is_hidden_by_filter(
+    client: httpx.AsyncClient,
+) -> None:
+    """A diferencia de una cripto, una ACCIÓN sin bolsa resuelta (fuera del catálogo) sí se
+    esconde con un filtro activo: su bolsa existe, solo que no se conoce todavía — no es lo
+    mismo que no tener ninguna.
+    """
+
+    headers = await _register_and_login(client, "sin-bolsa@example.com")
+    await client.post(
+        "/api/v1/watchlist",
+        json={"ticker": "FUERA-DEL-CATALOGO", "asset_type": "STOCK"},
+        headers=headers,
+    )
+
+    filtered = await client.get(
+        "/api/v1/watchlist", params={"exchange": "NASDAQ"}, headers=headers
+    )
+    unfiltered = await client.get("/api/v1/watchlist", headers=headers)
+
+    assert filtered.json() == []
+    assert len(unfiltered.json()) == 1

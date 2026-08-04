@@ -8,7 +8,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.api.deps import CurrentUser, DbSession, TickerCatalog
 from app.models.enums import AssetType, ExchangeType
@@ -29,13 +29,26 @@ async def list_watchlist(
     exchange: Annotated[ExchangeType | None, Query()] = None,
 ) -> list[WatchlistItem]:
     """`exchange` opcional para que el cliente pueda mostrar solo la bolsa que el usuario
-    eligió. Sin el parámetro devuelve todo, incluidos los items sin bolsa resuelta (cripto y
-    símbolos fuera del catálogo) — filtrar es una decisión del cliente, no un default acá.
+    eligió. Sin el parámetro devuelve todo.
+
+    Las CRIPTO quedan siempre visibles, incluso con un filtro de bolsa activo: no cotizan en
+    NASDAQ ni en NYSE, así que "filtrar por bolsa" no es una pregunta que se les pueda aplicar
+    — esconderlas sería tratar la ausencia de bolsa como si fuera otra bolsa, y alguien que
+    sigue BTC lo vería desaparecer al elegir NASDAQ.
+
+    Las ACCIONES sin bolsa resuelta (`exchange = NULL`, símbolos que todavía no están en el
+    catálogo) sí se esconden con un filtro activo: ahí la bolsa existe pero no se conoce, que
+    es distinto de no tener ninguna.
     """
 
     filters = [WatchlistItem.user_id == current_user.id]
     if exchange is not None:
-        filters.append(WatchlistItem.exchange == exchange)
+        filters.append(
+            or_(
+                WatchlistItem.exchange == exchange,
+                WatchlistItem.asset_type == AssetType.CRYPTO,
+            )
+        )
 
     result = await session.scalars(select(WatchlistItem).where(*filters))
     return list(result.all())

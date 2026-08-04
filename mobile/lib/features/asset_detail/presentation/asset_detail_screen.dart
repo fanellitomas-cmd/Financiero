@@ -8,25 +8,48 @@ import '../data/push_notification_payload.dart';
 import '../widgets/lightweight_chart_view.dart';
 import 'asset_detail_controller.dart';
 
-/// Pantalla 3: Ficha de Inteligencia Profunda de un activo. Combina dos fuentes: un fetch
-/// on-demand contra `GET /api/v1/assets/{ticker}` al abrir la pantalla (`assetIntelligenceProvider`,
-/// para no depender de esperar la próxima corrida del scheduler) y el WebSocket en vivo
-/// (`tickerPayloadProvider`, para reflejar al toque una alerta nueva mientras la pantalla ya
-/// está abierta). El WS tiene prioridad cuando ambos tienen datos.
-///
-/// El chart todavía no tiene una fuente de velas históricas real — se ve con datos de
-/// ejemplo, marcados explícitamente en la UI, hasta que el backend exponga ese endpoint.
-class AssetDetailScreen extends ConsumerStatefulWidget {
-  const AssetDetailScreen({super.key, required this.ticker, required this.assetType});
+/// Pantalla 3 en mobile: la Ficha como pantalla completa, navegada por `/asset/:ticker`. En
+/// escritorio el contenido se muestra en el panel derecho del master-detail sin navegar — ahí
+/// se usa `AssetDetailView` directo (ver `watchlist_screen.dart`), que es el mismo cuerpo sin
+/// Scaffold ni AppBar propios.
+class AssetDetailScreen extends StatelessWidget {
+  const AssetDetailScreen(
+      {super.key, required this.ticker, required this.assetType});
 
   final String ticker;
   final AssetType assetType;
 
   @override
-  ConsumerState<AssetDetailScreen> createState() => _AssetDetailScreenState();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(ticker)),
+      body: AssetDetailView(ticker: ticker, assetType: assetType),
+    );
+  }
 }
 
-class _AssetDetailScreenState extends ConsumerState<AssetDetailScreen> {
+/// Ficha de Inteligencia Profunda de un activo, sin cromo propio (ni Scaffold ni AppBar) para
+/// poder usarse tanto como pantalla completa (mobile) como panel lateral (escritorio).
+///
+/// Combina dos fuentes: un fetch on-demand contra `GET /api/v1/assets/{ticker}` al abrir
+/// (`assetIntelligenceProvider`, para no depender de esperar la próxima corrida del scheduler)
+/// y el WebSocket en vivo (`tickerPayloadProvider`, para reflejar al toque una alerta nueva
+/// mientras la ficha ya está abierta). El WS tiene prioridad cuando ambos tienen datos.
+///
+/// El chart todavía no tiene una fuente de velas históricas real — se ve con datos de
+/// ejemplo, marcados explícitamente en la UI, hasta que el backend exponga ese endpoint.
+class AssetDetailView extends ConsumerStatefulWidget {
+  const AssetDetailView(
+      {super.key, required this.ticker, required this.assetType});
+
+  final String ticker;
+  final AssetType assetType;
+
+  @override
+  ConsumerState<AssetDetailView> createState() => _AssetDetailViewState();
+}
+
+class _AssetDetailViewState extends ConsumerState<AssetDetailView> {
   bool? _showBeginnerOverride;
 
   @override
@@ -37,50 +60,51 @@ class _AssetDetailScreenState extends ConsumerState<AssetDetailScreen> {
 
     final effectivePayload = liveAsync.valueOrNull ?? onDemandAsync.valueOrNull;
 
-    return Scaffold(
-      appBar: AppBar(title: Text(widget.ticker)),
-      body: effectivePayload != null
-          ? _AssetDetailBody(
-              payload: effectivePayload,
-              showBeginner: _showBeginnerOverride ?? effectivePayload.defaultViewIsBeginner,
-              onToggleBeginner: (value) => setState(() => _showBeginnerOverride = value),
-            )
-          : onDemandAsync.when(
-              // `data` solo se ejecuta acá si `effectivePayload` fue null a pesar de tener
-              // datos, lo cual no debería pasar (`valueOrNull` ya lo hubiese devuelto arriba)
-              // — placeholder defensivo, no un camino real.
-              data: (_) => const SizedBox.shrink(),
-              loading: () => Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const CircularProgressIndicator(),
-                      const SizedBox(height: 16),
-                      Text('Analizando ${widget.ticker}…', textAlign: TextAlign.center),
-                    ],
-                  ),
-                ),
-              ),
-              error: (error, stackTrace) => Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(describeApiError(error), textAlign: TextAlign.center),
-                      const SizedBox(height: 12),
-                      FilledButton(
-                        onPressed: () => ref.invalidate(assetIntelligenceProvider(args)),
-                        child: const Text('Reintentar'),
-                      ),
-                    ],
-                  ),
+    return effectivePayload != null
+        ? _AssetDetailBody(
+            payload: effectivePayload,
+            showBeginner:
+                _showBeginnerOverride ?? effectivePayload.defaultViewIsBeginner,
+            onToggleBeginner: (value) =>
+                setState(() => _showBeginnerOverride = value),
+          )
+        : onDemandAsync.when(
+            // `data` solo se ejecuta acá si `effectivePayload` fue null a pesar de tener
+            // datos, lo cual no debería pasar (`valueOrNull` ya lo hubiese devuelto arriba)
+            // — placeholder defensivo, no un camino real.
+            data: (_) => const SizedBox.shrink(),
+            loading: () => Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 16),
+                    Text('Analizando ${widget.ticker}…',
+                        textAlign: TextAlign.center),
+                  ],
                 ),
               ),
             ),
-    );
+            error: (error, stackTrace) => Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(describeApiError(error), textAlign: TextAlign.center),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      onPressed: () =>
+                          ref.invalidate(assetIntelligenceProvider(args)),
+                      child: const Text('Reintentar'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
   }
 }
 
@@ -104,7 +128,8 @@ class _AssetDetailBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final narrative = showBeginner ? payload.beginnerNarrative : payload.technicalNarrative;
+    final narrative =
+        showBeginner ? payload.beginnerNarrative : payload.technicalNarrative;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -144,9 +169,11 @@ class _AssetDetailBody extends StatelessWidget {
           ),
         if (payload.fullAnalysis != null) ...[
           const SizedBox(height: 20),
-          Text('Proyección por horizonte', style: Theme.of(context).textTheme.titleMedium),
+          Text('Proyección por horizonte',
+              style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
-          for (final horizon in payload.fullAnalysis!.horizons) _HorizonCard(horizon: horizon),
+          for (final horizon in payload.fullAnalysis!.horizons)
+            _HorizonCard(horizon: horizon),
         ],
       ],
     );
@@ -174,7 +201,8 @@ class _UrgencyBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: color),
       ),
-      child: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+      child: Text(label,
+          style: TextStyle(color: color, fontWeight: FontWeight.bold)),
     );
   }
 }
@@ -203,7 +231,8 @@ class _HorizonCard extends StatelessWidget {
               style: const TextStyle(color: Colors.grey, fontSize: 12),
             ),
             const SizedBox(height: 8),
-            for (final scenario in horizon.scenarios) _ScenarioBar(scenario: scenario),
+            for (final scenario in horizon.scenarios)
+              _ScenarioBar(scenario: scenario),
           ],
         ),
       ),

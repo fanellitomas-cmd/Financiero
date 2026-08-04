@@ -5,6 +5,10 @@ import 'package:go_router/go_router.dart';
 import '../../../core/network/api_error.dart';
 import '../../../core/providers.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/layout/breakpoints.dart';
+import '../../../core/widgets/master_detail_layout.dart';
+import '../../asset_detail/presentation/asset_detail_panel.dart';
+import '../../asset_detail/presentation/selected_asset_controller.dart';
 import '../../settings/data/exchange_type.dart';
 import '../../settings/presentation/exchange_selector.dart';
 import '../../watchlist/data/watchlist_models.dart';
@@ -30,7 +34,8 @@ class DashboardScreen extends ConsumerWidget {
 
     final quotes = quotesAsync.valueOrNull;
     final quotesByTicker = <String, TickerQuote>{
-      if (quotes != null) for (final quote in quotes) quote.ticker: quote,
+      if (quotes != null)
+        for (final quote in quotes) quote.ticker: quote,
     };
 
     return Scaffold(
@@ -38,48 +43,52 @@ class DashboardScreen extends ConsumerWidget {
         title: const Text('Financiero'),
         actions: const [ExchangeSelector()],
       ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          ref.invalidate(watchlistProvider);
-          ref.invalidate(marketQuotesProvider);
-        },
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            const _DailyDigestCard(),
-            const SizedBox(height: 24),
-            Text(
-              // El título nombra la bolsa activa: el heatmap está filtrado por ella
-              // (`watchlistProvider` observa `selectedExchangeProvider`), y sin decirlo
-              // parecería que faltan activos.
-              selectedExchange == null
-                  ? 'Watchlist'
-                  : 'Watchlist · ${selectedExchange.displayName}',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 12),
-            watchlistAsync.when(
-              data: (items) => items.isEmpty
-                  ? Text(
-                      selectedExchange == null
-                          ? 'Todavía no seguís ningún activo.'
-                          : 'No seguís ningún activo de '
-                              '${selectedExchange.displayName}.',
-                      style: const TextStyle(color: Colors.grey),
-                    )
-                  : _HeatmapGrid(items: items, quotesByTicker: quotesByTicker),
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, stackTrace) => Text(describeApiError(error)),
-            ),
-            if (quotesAsync.hasError) ...[
-              const SizedBox(height: 8),
+      body: MasterDetailLayout(
+        master: RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(watchlistProvider);
+            ref.invalidate(marketQuotesProvider);
+          },
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              const _DailyDigestCard(),
+              const SizedBox(height: 24),
               Text(
-                'Precios en vivo: ${describeApiError(quotesAsync.error!)}',
-                style: const TextStyle(color: Colors.grey, fontSize: 12),
+                // El título nombra la bolsa activa: el heatmap está filtrado por ella
+                // (`watchlistProvider` observa `selectedExchangeProvider`), y sin decirlo
+                // parecería que faltan activos.
+                selectedExchange == null
+                    ? 'Watchlist'
+                    : 'Watchlist · ${selectedExchange.displayName}',
+                style: Theme.of(context).textTheme.titleMedium,
               ),
+              const SizedBox(height: 12),
+              watchlistAsync.when(
+                data: (items) => items.isEmpty
+                    ? Text(
+                        selectedExchange == null
+                            ? 'Todavía no seguís ningún activo.'
+                            : 'No seguís ningún activo de '
+                                '${selectedExchange.displayName}.',
+                        style: const TextStyle(color: Colors.grey),
+                      )
+                    : _HeatmapGrid(
+                        items: items, quotesByTicker: quotesByTicker),
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, stackTrace) => Text(describeApiError(error)),
+              ),
+              if (quotesAsync.hasError) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Precios en vivo: ${describeApiError(quotesAsync.error!)}',
+                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
+        detail: const AssetDetailPanel(),
       ),
     );
   }
@@ -96,7 +105,8 @@ class _DailyDigestCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Resumen del día', style: Theme.of(context).textTheme.titleMedium),
+            Text('Resumen del día',
+                style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             const Text(
               'El Daily Digest generado por el agente todavía no tiene un endpoint en el '
@@ -118,32 +128,43 @@ class _HeatmapGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        mainAxisSpacing: 8,
-        crossAxisSpacing: 8,
-        childAspectRatio: 1.1,
-      ),
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final item = items[index];
-        return _HeatmapTile(item: item, quote: quotesByTicker[item.ticker]);
+    // Columnas según el ancho REAL disponible, no según el de la ventana: en master-detail
+    // este grid vive en un panel de 380px aunque la ventana tenga 1900, así que mirar
+    // `MediaQuery` daría demasiadas columnas y los tiles quedarían ilegibles.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const targetTileWidth = 120.0;
+        final columns =
+            (constraints.maxWidth / targetTileWidth).floor().clamp(2, 8);
+
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+            childAspectRatio: 1.1,
+          ),
+          itemCount: items.length,
+          itemBuilder: (context, index) {
+            final item = items[index];
+            return _HeatmapTile(item: item, quote: quotesByTicker[item.ticker]);
+          },
+        );
       },
     );
   }
 }
 
-class _HeatmapTile extends StatelessWidget {
+class _HeatmapTile extends ConsumerWidget {
   const _HeatmapTile({required this.item, required this.quote});
 
   final WatchlistItem item;
   final TickerQuote? quote;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final hasValidQuote = quote != null && quote!.status == QuoteStatus.ok;
     final changePct = hasValidQuote ? quote!.dayChangePct : null;
 
@@ -158,7 +179,17 @@ class _HeatmapTile extends StatelessWidget {
         : '${changePct >= 0 ? '+' : ''}${changePct.toStringAsFixed(2)}%';
 
     return InkWell(
-      onTap: () => context.push('/asset/${item.ticker}?assetType=${item.assetType.toJson()}'),
+      onTap: () {
+        // Mismo criterio que la Watchlist: en escritorio llena el panel derecho, en mobile
+        // navega a la ficha completa.
+        if (context.isMasterDetail) {
+          ref.read(selectedAssetProvider.notifier).state =
+              SelectedAsset(ticker: item.ticker, assetType: item.assetType);
+          return;
+        }
+        context
+            .push('/asset/${item.ticker}?assetType=${item.assetType.toJson()}');
+      },
       borderRadius: BorderRadius.circular(12),
       child: Container(
         decoration: BoxDecoration(
@@ -170,7 +201,8 @@ class _HeatmapTile extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(item.ticker, style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text(item.ticker,
+                style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
             Text(label, style: TextStyle(color: color, fontSize: 12)),
           ],

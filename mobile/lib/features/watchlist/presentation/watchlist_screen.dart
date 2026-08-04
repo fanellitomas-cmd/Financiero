@@ -2,8 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/layout/breakpoints.dart';
 import '../../../core/network/api_error.dart';
 import '../../../core/providers.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/master_detail_layout.dart';
+import '../../asset_detail/presentation/asset_detail_panel.dart';
+import '../../asset_detail/presentation/selected_asset_controller.dart';
 import '../../settings/data/exchange_type.dart';
 import '../../settings/presentation/exchange_selector.dart';
 import '../data/watchlist_models.dart';
@@ -21,6 +26,18 @@ class WatchlistScreen extends ConsumerWidget {
   Future<void> _refreshAll(WidgetRef ref) async {
     ref.invalidate(watchlistProvider);
     ref.invalidate(fullWatchlistProvider);
+  }
+
+  /// En escritorio abrir un activo llena el panel derecho (sin navegar, así la lista queda a la
+  /// vista para saltar entre activos); en mobile no hay lugar para dos paneles, así que se
+  /// navega a la ficha como pantalla completa.
+  void _openAsset(BuildContext context, WidgetRef ref, WatchlistItem item) {
+    if (context.isMasterDetail) {
+      ref.read(selectedAssetProvider.notifier).state =
+          SelectedAsset(ticker: item.ticker, assetType: item.assetType);
+      return;
+    }
+    context.push('/asset/${item.ticker}?assetType=${item.assetType.toJson()}');
   }
 
   Future<void> _showEditDialog(
@@ -44,7 +61,8 @@ class WatchlistScreen extends ConsumerWidget {
             children: [
               TextField(
                 controller: thresholdController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
                 decoration: InputDecoration(
                   labelText: 'Umbral de alerta (%)',
                   errorText: errorText,
@@ -55,7 +73,8 @@ class WatchlistScreen extends ConsumerWidget {
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Modo principiante'),
                 value: enableBeginnerMode,
-                onChanged: (value) => setDialogState(() => enableBeginnerMode = value),
+                onChanged: (value) =>
+                    setDialogState(() => enableBeginnerMode = value),
               ),
             ],
           ),
@@ -66,9 +85,11 @@ class WatchlistScreen extends ConsumerWidget {
             ),
             FilledButton(
               onPressed: () async {
-                final threshold = double.tryParse(thresholdController.text.trim());
+                final threshold =
+                    double.tryParse(thresholdController.text.trim());
                 if (threshold == null || threshold <= 0 || threshold > 100) {
-                  setDialogState(() => errorText = 'Ingresá un número entre 0 y 100.');
+                  setDialogState(
+                      () => errorText = 'Ingresá un número entre 0 y 100.');
                   return;
                 }
                 try {
@@ -77,7 +98,9 @@ class WatchlistScreen extends ConsumerWidget {
                         alertThresholdPct: threshold,
                         enableBeginnerMode: enableBeginnerMode,
                       );
-                  if (dialogContext.mounted) Navigator.of(dialogContext).pop(true);
+                  if (dialogContext.mounted) {
+                    Navigator.of(dialogContext).pop(true);
+                  }
                 } on Object catch (error) {
                   setDialogState(() => errorText = describeApiError(error));
                 }
@@ -120,23 +143,30 @@ class WatchlistScreen extends ConsumerWidget {
         },
         child: const Icon(Icons.add),
       ),
-      body: watchlistAsync.when(
-        data: (items) => RefreshIndicator(
-          onRefresh: () => _refreshAll(ref),
-          child: items.isEmpty
-              ? _EmptyState(selectedExchange: selectedExchange)
-              : _WatchlistBody(
-                  items: items,
-                  selectedExchange: selectedExchange,
-                  onEdit: (item) => _showEditDialog(context, ref, item),
-                  onDelete: (item) async {
-                    await ref.read(watchlistRepositoryProvider).remove(item.id);
-                    await _refreshAll(ref);
-                  },
-                ),
+      body: MasterDetailLayout(
+        master: watchlistAsync.when(
+          data: (items) => RefreshIndicator(
+            onRefresh: () => _refreshAll(ref),
+            child: items.isEmpty
+                ? _EmptyState(selectedExchange: selectedExchange)
+                : _WatchlistBody(
+                    items: items,
+                    selectedExchange: selectedExchange,
+                    onOpen: (item) => _openAsset(context, ref, item),
+                    onEdit: (item) => _showEditDialog(context, ref, item),
+                    onDelete: (item) async {
+                      await ref
+                          .read(watchlistRepositoryProvider)
+                          .remove(item.id);
+                      await _refreshAll(ref);
+                    },
+                  ),
+          ),
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, stackTrace) =>
+              Center(child: Text(describeApiError(error))),
         ),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => Center(child: Text(describeApiError(error))),
+        detail: const AssetDetailPanel(),
       ),
     );
   }
@@ -146,12 +176,14 @@ class _WatchlistBody extends ConsumerWidget {
   const _WatchlistBody({
     required this.items,
     required this.selectedExchange,
+    required this.onOpen,
     required this.onEdit,
     required this.onDelete,
   });
 
   final List<WatchlistItem> items;
   final ExchangeType? selectedExchange;
+  final ValueChanged<WatchlistItem> onOpen;
   final ValueChanged<WatchlistItem> onEdit;
   final ValueChanged<WatchlistItem> onDelete;
 
@@ -169,12 +201,16 @@ class _WatchlistBody extends ConsumerWidget {
           );
         }
         final item = items[index - (hiddenCount > 0 ? 1 : 0)];
+        final isSelected =
+            ref.watch(selectedAssetProvider)?.ticker == item.ticker;
         return ListTile(
+          // Resaltar el seleccionado solo importa en master-detail, donde la fila y su detalle
+          // conviven en pantalla; en mobile la selección es efímera (navega y vuelve).
+          selected: isSelected && context.isMasterDetail,
+          selectedTileColor: AppTheme.surface,
           title: Text(item.ticker),
           subtitle: Text(_subtitleFor(item)),
-          onTap: () => context.push(
-            '/asset/${item.ticker}?assetType=${item.assetType.toJson()}',
-          ),
+          onTap: () => onOpen(item),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -205,7 +241,8 @@ class _WatchlistBody extends ConsumerWidget {
 
   String _subtitleFor(WatchlistItem item) {
     final kind = item.assetType == AssetType.stock ? 'Acción' : 'Cripto';
-    final exchange = item.exchange != null ? ' · ${item.exchange!.displayName}' : '';
+    final exchange =
+        item.exchange != null ? ' · ${item.exchange!.displayName}' : '';
     final beginner = item.enableBeginnerMode ? ' · modo principiante' : '';
     return '$kind$exchange · alerta a ±${item.alertThresholdPct}%$beginner';
   }
@@ -214,7 +251,8 @@ class _WatchlistBody extends ConsumerWidget {
 /// Aviso de que hay items escondidos por el filtro. Sin esto, alguien con solo cripto en la
 /// watchlist vería una lista vacía al elegir NASDAQ y parecería que se le borraron los datos.
 class _FilterNotice extends StatelessWidget {
-  const _FilterNotice({required this.selectedExchange, required this.hiddenCount});
+  const _FilterNotice(
+      {required this.selectedExchange, required this.hiddenCount});
 
   final ExchangeType? selectedExchange;
   final int hiddenCount;
@@ -265,7 +303,9 @@ class _EmptyState extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 80),
       children: [
         Icon(
-          hiddenByFilter ? Icons.filter_alt_off_outlined : Icons.add_circle_outline,
+          hiddenByFilter
+              ? Icons.filter_alt_off_outlined
+              : Icons.add_circle_outline,
           size: 40,
           color: Colors.grey,
         ),

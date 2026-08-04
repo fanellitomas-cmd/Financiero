@@ -48,11 +48,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               ? '\n\n(sin un análisis reciente guardado de ${response.referencedTicker})'
               : '');
       setState(
-        () => _messages.add(ChatMessage(text: '${response.reply}$suffix', isFromUser: false)),
+        () => _messages.add(
+            ChatMessage(text: '${response.reply}$suffix', isFromUser: false)),
       );
     } on Object catch (error) {
       setState(
-        () => _messages.add(ChatMessage(text: describeApiError(error), isFromUser: false)),
+        () => _messages
+            .add(ChatMessage(text: describeApiError(error), isFromUser: false)),
       );
     } finally {
       setState(() => _isSending = false);
@@ -91,7 +93,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                             child: Text(item.ticker),
                           ),
                       ],
-                      onChanged: (value) => setState(() => _selectedTicker = value),
+                      onChanged: (value) =>
+                          setState(() => _selectedTicker = value),
                     ),
                   ),
                 ],
@@ -102,59 +105,69 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
         ),
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: _messages.isEmpty
-                ? const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(24),
-                      child: Text(
-                        'Preguntá lo que quieras sobre un activo, ej: '
-                        '"¿qué pasó con NVDA hoy?"',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _messages.length,
-                    itemBuilder: (context, index) => _ChatBubble(message: _messages[index]),
-                  ),
-          ),
-          SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _inputController,
-                      onSubmitted: (_) => _send(),
-                      decoration: const InputDecoration(
-                        hintText: 'Escribí tu pregunta…',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  _isSending
-                      ? const Padding(
-                          padding: EdgeInsets.all(12),
-                          child: SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+      // Ancho acotado en escritorio: un chat estirado a 1900px deja las burbujas perdidas a
+      // los costados y el ojo tiene que barrer toda la pantalla para seguir la conversación.
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: Column(
+            children: [
+              Expanded(
+                child: _messages.isEmpty
+                    ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Text(
+                            'Preguntá lo que quieras sobre un activo, ej: '
+                            '"¿qué pasó con NVDA hoy?"',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.grey),
                           ),
-                        )
-                      : IconButton.filled(onPressed: _send, icon: const Icon(Icons.send)),
-                ],
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: _messages.length,
+                        itemBuilder: (context, index) =>
+                            _ChatBubble(message: _messages[index]),
+                      ),
               ),
-            ),
+              SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _inputController,
+                          onSubmitted: (_) => _send(),
+                          decoration: const InputDecoration(
+                            hintText: 'Escribí tu pregunta…',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _isSending
+                          ? const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            )
+                          : IconButton.filled(
+                              onPressed: _send, icon: const Icon(Icons.send)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -167,7 +180,8 @@ class _ChatBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final alignment = message.isFromUser ? Alignment.centerRight : Alignment.centerLeft;
+    final alignment =
+        message.isFromUser ? Alignment.centerRight : Alignment.centerLeft;
     final color = message.isFromUser
         ? Theme.of(context).colorScheme.primaryContainer
         : Theme.of(context).colorScheme.surfaceContainerHighest;
@@ -178,7 +192,8 @@ class _ChatBubble extends StatelessWidget {
         margin: const EdgeInsets.symmetric(vertical: 4),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         constraints: const BoxConstraints(maxWidth: 280),
-        decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(16)),
+        decoration: BoxDecoration(
+            color: color, borderRadius: BorderRadius.circular(16)),
         child: Text(message.text),
       ),
     );
