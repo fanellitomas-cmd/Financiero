@@ -5,6 +5,7 @@ import '../../../core/network/api_error.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../watchlist/data/watchlist_models.dart';
 import '../data/push_notification_payload.dart';
+import '../widgets/deep_intelligence_sheet.dart';
 import '../widgets/ticker_history_chart.dart';
 import 'asset_detail_controller.dart';
 
@@ -28,17 +29,20 @@ class AssetDetailScreen extends StatelessWidget {
   }
 }
 
-/// Ficha de Inteligencia Profunda de un activo, sin cromo propio (ni Scaffold ni AppBar) para
-/// poder usarse tanto como pantalla completa (mobile) como panel lateral (escritorio).
+/// Detalle de un activo, sin cromo propio (ni Scaffold ni AppBar) para poder usarse tanto como
+/// pantalla completa (mobile) como panel lateral (escritorio).
 ///
-/// Combina dos fuentes: un fetch on-demand contra `GET /api/v1/assets/{ticker}` al abrir
-/// (`assetIntelligenceProvider`, para no depender de esperar la próxima corrida del scheduler)
-/// y el WebSocket en vivo (`tickerPayloadProvider`, para reflejar al toque una alerta nueva
-/// mientras la ficha ya está abierta). El WS tiene prioridad cuando ambos tienen datos.
+/// Dos pestañas, con fuentes de datos INDEPENDIENTES:
 ///
-/// El chart de velas sale de `GET /api/v1/market/history/{ticker}` y se dibuja con `fl_chart`
-/// (Flutter puro, se ve igual en mobile, web y escritorio). Se degrada por su cuenta: si no hay
-/// histórico, muestra el motivo y el resto de la Ficha sigue intacta.
+///   - **Resumen** — la alerta del agente (`GET /api/v1/assets/{ticker}` on-demand más el
+///     WebSocket en vivo) y el chart de velas (`GET /api/v1/market/history/{ticker}`).
+///   - **Inteligencia Profunda** — fundamentales, síntesis de reportes y proyecciones por horizonte
+///     (`GET /api/v1/tickers/{ticker}/intelligence`).
+///
+/// Las pestañas están ARRIBA del gate del payload de alertas a propósito. El cuerpo de "Resumen"
+/// no se puede dibujar sin ese payload, pero la Inteligencia Profunda no lo necesita: si estuviera
+/// anidada dentro, un motor de alertas sin credenciales la dejaría inalcanzable aunque su propio
+/// endpoint esté respondiendo perfecto.
 class AssetDetailView extends ConsumerStatefulWidget {
   const AssetDetailView(
       {super.key, required this.ticker, required this.assetType});
@@ -50,13 +54,77 @@ class AssetDetailView extends ConsumerStatefulWidget {
   ConsumerState<AssetDetailView> createState() => _AssetDetailViewState();
 }
 
-class _AssetDetailViewState extends ConsumerState<AssetDetailView> {
+class _AssetDetailViewState extends ConsumerState<AssetDetailView>
+    with SingleTickerProviderStateMixin {
   bool? _showBeginnerOverride;
+  late final TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final args = (widget.ticker, widget.assetType);
-    final liveAsync = ref.watch(tickerPayloadProvider(widget.ticker));
+    return Column(
+      children: [
+        TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(text: 'Resumen', icon: Icon(Icons.insights_outlined, size: 18)),
+            Tab(
+              text: 'Inteligencia Profunda',
+              icon: Icon(Icons.travel_explore_outlined, size: 18),
+            ),
+          ],
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _OverviewTab(
+                ticker: widget.ticker,
+                assetType: widget.assetType,
+                showBeginnerOverride: _showBeginnerOverride,
+                onToggleBeginner: (value) =>
+                    setState(() => _showBeginnerOverride = value),
+              ),
+              DeepIntelligenceSheet(ticker: widget.ticker),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Pestaña "Resumen": la alerta del agente más el chart. Es el cuerpo que antes era todo
+/// `AssetDetailView`, extraído tal cual para que la pestaña de Inteligencia Profunda no herede su
+/// dependencia del payload.
+class _OverviewTab extends ConsumerWidget {
+  const _OverviewTab({
+    required this.ticker,
+    required this.assetType,
+    required this.showBeginnerOverride,
+    required this.onToggleBeginner,
+  });
+
+  final String ticker;
+  final AssetType assetType;
+  final bool? showBeginnerOverride;
+  final ValueChanged<bool> onToggleBeginner;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final args = (ticker, assetType);
+    final liveAsync = ref.watch(tickerPayloadProvider(ticker));
     final onDemandAsync = ref.watch(assetIntelligenceProvider(args));
 
     final effectivePayload = liveAsync.valueOrNull ?? onDemandAsync.valueOrNull;
@@ -65,9 +133,8 @@ class _AssetDetailViewState extends ConsumerState<AssetDetailView> {
         ? _AssetDetailBody(
             payload: effectivePayload,
             showBeginner:
-                _showBeginnerOverride ?? effectivePayload.defaultViewIsBeginner,
-            onToggleBeginner: (value) =>
-                setState(() => _showBeginnerOverride = value),
+                showBeginnerOverride ?? effectivePayload.defaultViewIsBeginner,
+            onToggleBeginner: onToggleBeginner,
           )
         : onDemandAsync.when(
             // `data` solo se ejecuta acá si `effectivePayload` fue null a pesar de tener
@@ -82,8 +149,7 @@ class _AssetDetailViewState extends ConsumerState<AssetDetailView> {
                   children: [
                     const CircularProgressIndicator(),
                     const SizedBox(height: 16),
-                    Text('Analizando ${widget.ticker}…',
-                        textAlign: TextAlign.center),
+                    Text('Analizando $ticker…', textAlign: TextAlign.center),
                   ],
                 ),
               ),

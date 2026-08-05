@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/alerts/data/alerts_repository.dart';
 import '../features/asset_detail/data/asset_repository.dart';
+import '../features/asset_detail/data/deep_research_repository.dart';
 import '../features/asset_detail/data/history_repository.dart';
 import '../features/auth/data/auth_repository.dart';
 import '../features/auth/presentation/auth_controller.dart';
@@ -86,6 +87,10 @@ final assetRepositoryProvider = Provider<AssetRepository>(
 
 final historyRepositoryProvider = Provider<HistoryRepository>(
   (ref) => HistoryRepository(ref.watch(apiClientProvider)),
+);
+
+final deepResearchRepositoryProvider = Provider<DeepResearchRepository>(
+  (ref) => DeepResearchRepository(ref.watch(apiClientProvider)),
 );
 
 final alertsRepositoryProvider = Provider<AlertsRepository>(
