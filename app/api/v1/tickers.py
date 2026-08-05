@@ -13,10 +13,16 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from app.api.deps import CurrentUser, TickerCatalog, TickerIntelligenceDep
+from app.api.deps import (
+    CurrentUser,
+    TickerCatalog,
+    TickerIntelligenceDep,
+    TickerSearchDep,
+)
 from app.core.config import app_settings
 from app.models.enums import ExchangeType
 from app.schemas.intelligence import TickerIntelligence
+from app.schemas.search import NaturalSearchRequest, NaturalSearchResponse
 from app.schemas.ticker import TickerPage, TickerRead
 
 router = APIRouter(prefix="/tickers", tags=["tickers"])
@@ -40,6 +46,38 @@ async def list_tickers(
         limit=limit,
         offset=offset,
     )
+
+
+@router.post(
+    "/search-nl",
+    response_model=NaturalSearchResponse,
+    summary="Búsqueda de tickers en lenguaje natural",
+)
+async def search_tickers_natural_language(
+    payload: NaturalSearchRequest,
+    # `current_user` antes que el servicio: FastAPI resuelve en orden de firma, y así un pedido sin
+    # token corta con 401 sin revelar el estado de configuración del backend.
+    current_user: CurrentUser,
+    search: TickerSearchDep,
+) -> NaturalSearchResponse:
+    """Traduce una consulta escrita ("tecnológicas baratas y sin mucha deuda") a criterios
+    estructurados con IA, y filtra el catálogo local más los ratios reales del proveedor.
+
+    El modelo interpreta la intención; el filtrado lo hace el backend contra sus propios datos.
+    Pedirle al modelo que elija los símbolos sería pedirle que recuerde de memoria el P/E de cada
+    empresa — ver `app/services/ticker_search_service.py`.
+
+    Siempre 200 con estructura válida. Sin credenciales de IA cae a búsqueda por texto sobre símbolo
+    y nombre (`criteria_source=TEXT_FALLBACK`); sin proveedor de fundamentales, los criterios
+    numéricos viajan en `unapplied_criteria` — porque una lista filtrada solo por sector, presentada
+    como si cumpliera "P/E menor a 20", sería una respuesta falsa.
+
+    Es POST y no GET aunque sea una lectura: la consulta es texto libre de hasta 500 caracteres (un
+    query string es el lugar equivocado para eso, y quedaría en los logs de cada proxy del camino) y
+    la operación gasta una llamada al modelo, algo que un GET no debería hacer.
+    """
+
+    return await search.search(payload.query, limit=payload.limit)
 
 
 @router.get("/{ticker}/intelligence", response_model=TickerIntelligence)

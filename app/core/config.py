@@ -61,6 +61,21 @@ class AppSettings(BaseSettings):
     # enorme no convierta un endpoint de lectura en una tormenta de tráfico contra el proveedor.
     portfolio_audit_max_history_tickers: int = 25
 
+    # Cuántas filas del catálogo puede traer la búsqueda en lenguaje natural después de filtrar por
+    # sector/bolsa/texto. Sin tope, "tecnológicas" traería miles de filas a memoria para descartar
+    # casi todas.
+    search_nl_max_candidates: int = 60
+    # A cuántos de esos candidatos se les piden los ratios. Es el número caro: `get_financial_metrics`
+    # pega a CINCO endpoints de FMP por símbolo, así que 12 son ~60 requests dentro de un request
+    # HTTP. Los candidatos que quedan afuera no entran en los resultados cuando la consulta tiene
+    # filtros numéricos — no se puede afirmar que cumplen algo que no se les midió.
+    search_nl_max_metric_lookups: int = 12
+
+    # Las traducciones se cachean por contenido y no cambian nunca (el mismo texto da la misma
+    # explicación), así que el TTL es largo: 24 horas.
+    financial_translator_cache_ttl_seconds: float = 86400.0
+    financial_translator_max_cache_entries: int = 500
+
     # Clientes web (el cliente Flutter corriendo en modo web, cualquier frontend futuro) llegan
     # desde otro origen (puerto distinto al de la API) — sin CORS habilitado, el navegador
     # bloquea el preflight OPTIONS antes de que la request real salga (405 Method Not Allowed,

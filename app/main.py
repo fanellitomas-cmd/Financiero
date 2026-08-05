@@ -22,12 +22,14 @@ from app.core.config import app_settings
 from app.core.database import async_session_factory, create_all_tables, engine
 from app.services.agent_runner_service import AgentRunnerService
 from app.services.chat_service import ChatService
+from app.services.financial_translator_service import FinancialTranslatorService
 from app.services.market_data_service import MarketDataService
 from app.services.market_summary_service import MarketSummaryService
 from app.services.portfolio_audit_service import PortfolioAuditService
 from app.services.push_service import PushNotificationService, TickerConnectionManager
 from app.services.scheduler import AgentScheduler
 from app.services.ticker_intelligence_service import TickerIntelligenceService
+from app.services.ticker_search_service import TickerSearchService
 from src.composition import build_ingestion_backed_dependencies
 from src.core.config import settings as agent_settings
 from src.ingestion.fmp_client import FMPClient
@@ -179,6 +181,33 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                     "faltan FMP_API_KEY y/o GEMINI_API_KEY; "
                     "/api/v1/tickers/{ticker}/intelligence servirá los bloques que pueda con "
                     "availability=UNAVAILABLE en el resto"
+                )
+            },
+        )
+
+    # La búsqueda en lenguaje natural y el Traductor Financiero también se instancian SIEMPRE. La
+    # búsqueda tiene el catálogo local (dato propio) para filtrar por texto/sector/bolsa aunque
+    # falten las dos credenciales, y el traductor responde `available=False` con el motivo — un 503
+    # obligaría al cliente a traducir "no configurado" a un aviso, que es lo que el servicio ya hace.
+    app.state.ticker_search_service = TickerSearchService(
+        async_session_factory,
+        gemini_client=gemini,
+        fmp_client=fmp,
+        max_candidates=app_settings.search_nl_max_candidates,
+        max_metric_lookups=app_settings.search_nl_max_metric_lookups,
+    )
+    app.state.financial_translator_service = FinancialTranslatorService(
+        gemini_client=gemini,
+        cache_ttl_seconds=app_settings.financial_translator_cache_ttl_seconds,
+        max_cache_entries=app_settings.financial_translator_max_cache_entries,
+    )
+    if gemini is None:
+        logger.warning(
+            "conversational_features_not_configured",
+            extra={
+                "hint": (
+                    "falta GEMINI_API_KEY; /api/v1/tickers/search-nl cae a búsqueda por texto y "
+                    "/api/v1/ai/translate-financial responde available=false"
                 )
             },
         )

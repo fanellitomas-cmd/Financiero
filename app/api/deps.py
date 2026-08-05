@@ -16,11 +16,13 @@ from app.core.security import decode_access_token
 from app.models.user import User
 from app.services.agent_runner_service import AgentRunnerService
 from app.services.chat_service import ChatService
+from app.services.financial_translator_service import FinancialTranslatorService
 from app.services.market_data_service import MarketDataService
 from app.services.market_summary_service import MarketSummaryService
 from app.services.portfolio_audit_service import PortfolioAuditService
 from app.services.ticker_catalog_service import TickerCatalogService
 from app.services.ticker_intelligence_service import TickerIntelligenceService
+from app.services.ticker_search_service import TickerSearchService
 from app.services.watchlist_alert_service import WatchlistAlertRuleService
 
 _oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
@@ -227,4 +229,48 @@ def get_watchlist_alert_rule_service(
 
 WatchlistAlertRules = Annotated[
     WatchlistAlertRuleService, Depends(get_watchlist_alert_rule_service)
+]
+
+
+def get_ticker_search_service(request: Request) -> TickerSearchService:
+    """La búsqueda en lenguaje natural se construye una vez en el lifespan, reutilizando los mismos
+    clientes de Gemini/FMP que ya usa el motor.
+
+    Como la Ficha y la Auditoría, **no** devuelve 503 por falta de credenciales: el catálogo local
+    es dato propio y alcanza para buscar por texto, sector y bolsa. Sin Gemini se degrada la
+    interpretación y sin FMP los filtros numéricos, y las dos cosas se declaran en la respuesta.
+    """
+
+    service = getattr(request.app.state, "ticker_search_service", None)
+    if not isinstance(service, TickerSearchService):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="La búsqueda en lenguaje natural no está disponible en este momento.",
+        )
+    return service
+
+
+TickerSearchDep = Annotated[TickerSearchService, Depends(get_ticker_search_service)]
+
+
+def get_financial_translator_service(request: Request) -> FinancialTranslatorService:
+    """El Traductor Financiero se construye una vez en el lifespan, envolviendo el mismo
+    `GeminiClient` reutilizado (y con él su caché de traducciones, que se perdería si se
+    reconstruyera por request).
+
+    Tampoco devuelve 503 sin credenciales: responde `available=False` con el motivo, para que el
+    cliente muestre un aviso en línea en vez de tratar una ayuda opcional como una falla.
+    """
+
+    service = getattr(request.app.state, "financial_translator_service", None)
+    if not isinstance(service, FinancialTranslatorService):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="El Traductor Financiero no está disponible en este momento.",
+        )
+    return service
+
+
+FinancialTranslatorDep = Annotated[
+    FinancialTranslatorService, Depends(get_financial_translator_service)
 ]

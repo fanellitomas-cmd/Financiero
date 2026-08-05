@@ -180,6 +180,23 @@ def _load_system_prompt() -> str:
         ) from exc
 
 
+def provider_sector_keys(sector: PortfolioSector) -> list[str]:
+    """Camino inverso de `normalize_sector`: qué nombres del proveedor caen en este sector del
+    producto, en minúsculas.
+
+    Lo usa la búsqueda en lenguaje natural para filtrar el catálogo, que guarda el sector CRUDO
+    (`Technology`), a partir de un criterio del producto (`TECNOLOGIA`). Se deriva de la misma
+    tabla que la traducción de ida, así que agregar un alias nuevo sirve para las dos direcciones
+    sin poder desincronizarlas.
+
+    Devuelve vacío para `CRIPTO` y `SIN_CLASIFICAR`: ninguno de los dos existe en el vocabulario
+    del proveedor de acciones — el primero se asigna por tipo de activo y el segundo es la
+    ausencia de sector.
+    """
+
+    return [raw for raw, mapped in _SECTOR_TRANSLATIONS.items() if mapped is sector]
+
+
 def normalize_sector(raw: str | None) -> PortfolioSector:
     """Sector crudo del proveedor -> sector del producto. `None` y lo desconocido caen en
     `SIN_CLASIFICAR`, nunca en un sector plausible: adivinarle el sector a un símbolo desconocido

@@ -15,8 +15,10 @@ from sqlalchemy.pool import StaticPool
 from app import models as _models  # noqa: F401  registra las tablas en Base.metadata
 from app.core.database import Base, get_db, get_session_factory
 from app.main import app
+from app.services.financial_translator_service import FinancialTranslatorService
 from app.services.portfolio_audit_service import PortfolioAuditService
 from app.services.ticker_intelligence_service import TickerIntelligenceService
+from app.services.ticker_search_service import TickerSearchService
 
 
 @pytest.fixture
@@ -65,6 +67,15 @@ async def client(
     # narrativa la sobreescriben con los dobles que necesiten.
     app.state.portfolio_audit_service = PortfolioAuditService(
         db_session_factory, system_prompt="Prompt de prueba."
+    )
+    # Búsqueda NL sin Gemini ni FMP: cae a búsqueda por texto sobre el catálogo del test. Los tests
+    # que quieran interpretación o filtros por ratios la sobreescriben con sus dobles.
+    app.state.ticker_search_service = TickerSearchService(
+        db_session_factory, system_prompt="Prompt de prueba."
+    )
+    # Traductor sin Gemini: responde `available=False` con su motivo.
+    app.state.financial_translator_service = FinancialTranslatorService(
+        system_prompt="Prompt de prueba."
     )
 
     transport = httpx.ASGITransport(app=app)

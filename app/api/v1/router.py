@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.v1 import (
+    ai,
     alerts,
     assets,
     auth,
@@ -31,6 +32,7 @@ api_v1_router.include_router(devices.router)
 api_v1_router.include_router(alerts.router)
 api_v1_router.include_router(assets.router)
 api_v1_router.include_router(chat.router)
+api_v1_router.include_router(ai.router)
 api_v1_router.include_router(market.router)
 api_v1_router.include_router(tickers.router)
 api_v1_router.include_router(internal.router)
