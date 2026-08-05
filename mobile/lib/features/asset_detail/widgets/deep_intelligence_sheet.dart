@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_error.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../ai/widgets/financial_translation_card.dart';
 import '../data/deep_intelligence.dart';
 import '../presentation/deep_intelligence_controller.dart';
 import 'fundamentals_section.dart';
@@ -120,11 +121,20 @@ class _SheetBody extends StatelessWidget {
         children: [
           _SheetHeader(intelligence: intelligence),
           const SizedBox(height: 14),
-          FundamentalsSection(fundamentals: intelligence.fundamentals),
+          FundamentalsSection(
+            fundamentals: intelligence.fundamentals,
+            ticker: intelligence.ticker,
+          ),
           const SizedBox(height: 14),
-          RagSummarySection(summary: intelligence.ragSummary),
+          RagSummarySection(
+            summary: intelligence.ragSummary,
+            ticker: intelligence.ticker,
+          ),
           const SizedBox(height: 18),
-          ProjectionsSection(projections: intelligence.projections),
+          ProjectionsSection(
+            projections: intelligence.projections,
+            ticker: intelligence.ticker,
+          ),
           const SizedBox(height: 18),
           const _Disclaimer(),
         ],
@@ -169,6 +179,11 @@ class _SheetHeader extends StatelessWidget {
                 ],
               ),
             ),
+            // El toggle va en la cabecera de la Ficha, que es donde el usuario se topa con el
+            // lenguaje técnico por primera vez. Su estado es global (`beginnerModeProvider`), así
+            // que encenderlo acá lo deja encendido al saltar a otro activo: alguien que necesita
+            // las explicaciones simples las necesita en todos los tickers.
+            const BeginnerModeToggle(),
             if (intelligence.servedFromCache)
               Tooltip(
                 // El backend cachea una hora. Decirlo evita que el usuario interprete un dato

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../ai/presentation/financial_translator_controller.dart';
+import '../../ai/widgets/financial_translation_card.dart';
 import '../data/deep_intelligence.dart';
 import 'intelligence_common.dart';
 
@@ -13,15 +16,21 @@ import 'intelligence_common.dart';
 ///     abanico, se compara.
 ///   - Largo: una tesis en prosa, con lo que la sostiene y lo que la invalidaría. Es un argumento,
 ///     se lee entero.
-class ProjectionsSection extends StatelessWidget {
-  const ProjectionsSection({super.key, required this.projections});
+class ProjectionsSection extends ConsumerWidget {
+  const ProjectionsSection({
+    super.key,
+    required this.projections,
+    required this.ticker,
+  });
 
   final Projections projections;
+  final String ticker;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isUnavailable =
         projections.availability == DataAvailability.unavailable;
+    final beginnerMode = ref.watch(beginnerModeProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -57,9 +66,29 @@ class ProjectionsSection extends StatelessWidget {
             const SizedBox(height: 12),
             _LongTermCard(projection: long),
           ],
+          if (beginnerMode)
+            if (_translatableText() case final text?)
+              FinancialTranslationCard(
+                text: text,
+                context: '$ticker · proyecciones',
+              ),
         ],
       ],
     );
+  }
+
+  /// La tesis de largo plazo más el argumento de corto: son los dos textos en prosa de la sección,
+  /// y los que traen el vocabulario que hay que desarmar ("compresión de múltiplos", "guidance",
+  /// "convicción").
+  ///
+  /// Las probabilidades de los escenarios NO entran: un porcentaje no necesita traducción, y
+  /// mandarlos diluiría la explicación de lo que sí la necesita.
+  String? _translatableText() {
+    final parts = [
+      if (projections.longTerm case final long?) long.thesis,
+      if (projections.shortTerm case final short?) short.argument,
+    ];
+    return parts.isEmpty ? null : parts.join(' ');
   }
 }
 

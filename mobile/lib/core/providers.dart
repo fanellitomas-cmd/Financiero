@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../features/ai/data/financial_translator_repository.dart';
 import '../features/alerts/data/alerts_repository.dart';
 import '../features/asset_detail/data/asset_repository.dart';
 import '../features/asset_detail/data/deep_research_repository.dart';
@@ -11,6 +12,7 @@ import '../features/dashboard/data/market_data_repository.dart';
 import '../features/dashboard/data/market_summary_repository.dart';
 import '../features/settings/data/exchange_type.dart';
 import '../features/settings/presentation/exchange_controller.dart';
+import '../features/tickers/data/search_nl_repository.dart';
 import '../features/tickers/data/ticker_repository.dart';
 import '../features/watchlist/data/watchlist_alerts_repository.dart';
 import '../features/watchlist/data/watchlist_audit_repository.dart';
@@ -119,4 +121,16 @@ final marketSummaryRepositoryProvider = Provider<MarketSummaryRepository>(
 
 final tickerRepositoryProvider = Provider<TickerRepository>(
   (ref) => TickerRepository(ref.watch(apiClientProvider)),
+);
+
+/// Búsqueda conversacional (`POST /tickers/search-nl`). Separada de `tickerRepositoryProvider`
+/// porque son dos búsquedas con costos muy distintos: aquella es una query al catálogo local, esta
+/// gasta una llamada al modelo más una al proveedor de fundamentales por símbolo.
+final searchNlRepositoryProvider = Provider<SearchNlRepository>(
+  (ref) => SearchNlRepository(ref.watch(apiClientProvider)),
+);
+
+final financialTranslatorRepositoryProvider =
+    Provider<FinancialTranslatorRepository>(
+  (ref) => FinancialTranslatorRepository(ref.watch(apiClientProvider)),
 );

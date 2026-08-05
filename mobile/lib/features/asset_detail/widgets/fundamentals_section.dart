@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../ai/presentation/financial_translator_controller.dart';
+import '../../ai/widgets/financial_translation_card.dart';
 import '../data/deep_intelligence.dart';
 import 'intelligence_common.dart';
 
@@ -9,15 +12,24 @@ import 'intelligence_common.dart';
 /// El semáforo lo calcula el BACKEND en código con umbrales explícitos, no el LLM: es
 /// determinístico y reproducible. Acá solo se pinta, con las notas que lo sostienen — un semáforo
 /// sin explicación no es auditable, y el usuario tiene derecho a ver por qué dice lo que dice.
-class FundamentalsSection extends StatelessWidget {
-  const FundamentalsSection({super.key, required this.fundamentals});
+class FundamentalsSection extends ConsumerWidget {
+  const FundamentalsSection({
+    super.key,
+    required this.fundamentals,
+    required this.ticker,
+  });
 
   final Fundamentals fundamentals;
 
+  /// El símbolo va al contexto de la traducción: "múltiplo alto" se explica distinto si viene de
+  /// una tecnológica que si viene de un banco.
+  final String ticker;
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isUnavailable =
         fundamentals.availability == DataAvailability.unavailable;
+    final beginnerMode = ref.watch(beginnerModeProvider);
 
     return Card(
       child: Padding(
@@ -70,11 +82,39 @@ class FundamentalsSection extends StatelessWidget {
                   reason: fundamentals.degradationReason,
                 ),
               ],
+              // La traducción se agrega DEBAJO del bloque técnico, que queda intacto: sustituirlo
+              // le sacaría al usuario la posibilidad de aprender a leerlo, que es el punto de tener
+              // un traductor y no dos versiones de la app.
+              // `if` anidado y no `beginnerMode && ... case ...`: el `&&` se evaluaría ANTES
+              // del patrón, así que el `case` recibiría un bool en vez del texto.
+              if (beginnerMode)
+                if (_translatableText() case final text?)
+                  FinancialTranslationCard(
+                    text: text,
+                    context: '$ticker · fundamentales',
+                  ),
             ],
           ],
         ),
       ),
     );
+  }
+
+  /// Qué parte de esta sección vale la pena traducir.
+  ///
+  /// El veredicto de salud financiera más las señales que lo sostienen, no la grilla entera de
+  /// ratios: una explicación de once números seguidos no es una explicación. Y son justamente las
+  /// notas las que traen los tecnicismos ("apalancamiento", "ratio corriente", "flujo de caja
+  /// libre") que el modo principiante existe para desarmar.
+  ///
+  /// `null` cuando no hay nada técnico que explicar — la tarjeta no aparece en vez de pedirle al
+  /// modelo que traduzca una cadena vacía.
+  String? _translatableText() {
+    if (fundamentals.financialHealthNotes.isEmpty) return null;
+    return [
+      'Salud financiera: ${fundamentals.financialHealth.name}.',
+      ...fundamentals.financialHealthNotes,
+    ].join(' ');
   }
 
   String? _subtitle() {

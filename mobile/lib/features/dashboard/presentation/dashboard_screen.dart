@@ -11,6 +11,7 @@ import '../../asset_detail/presentation/asset_detail_panel.dart';
 import '../../asset_detail/presentation/selected_asset_controller.dart';
 import '../../settings/data/exchange_type.dart';
 import '../../settings/presentation/exchange_selector.dart';
+import '../../tickers/widgets/nl_search_sheet.dart';
 import '../../watchlist/data/watchlist_models.dart';
 import '../../watchlist/presentation/watchlist_controller.dart';
 import '../data/market_quote.dart';
@@ -44,7 +45,34 @@ class DashboardScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Financiero'),
-        actions: const [ExchangeSelector()],
+        actions: [
+          // Búsqueda conversacional: es la entrada de exploración del catálogo, distinta del
+          // buscador incremental del diálogo de alta (que sirve para agregar un símbolo que ya
+          // sabés cuál es). Acá el usuario todavía no sabe qué busca.
+          IconButton(
+            icon: const Icon(Icons.travel_explore),
+            tooltip: 'Buscar con tus palabras',
+            onPressed: () => NlSearchSheet.show(
+              context,
+              onOpenTicker: (match) {
+                // En escritorio llena el panel de detalle sin navegar; en mobile navega a la Ficha.
+                // Se asume STOCK porque el catálogo que busca este endpoint es de acciones.
+                if (context.isMasterDetail) {
+                  ref.read(selectedAssetProvider.notifier).state =
+                      SelectedAsset(
+                    ticker: match.symbol,
+                    assetType: AssetType.stock,
+                  );
+                  Navigator.of(context).maybePop();
+                  return;
+                }
+                Navigator.of(context).maybePop();
+                context.push('/asset/${match.symbol}?assetType=STOCK');
+              },
+            ),
+          ),
+          const ExchangeSelector(),
+        ],
       ),
       body: MasterDetailLayout(
         master: RefreshIndicator(

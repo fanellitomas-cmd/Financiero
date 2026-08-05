@@ -56,6 +56,31 @@ PortfolioSector sectorFromWire(String? value) => switch (value) {
       _ => PortfolioSector.sinClasificar,
     };
 
+/// Nombre legible de un sector, para los casos en que el backend manda SOLO el código.
+///
+/// Donde el backend acompaña cada sector con su etiqueta (la distribución de la auditoría, los
+/// resultados de la búsqueda) se usa esa: si agrega un sector nuevo, la app vieja igual lo muestra
+/// en castellano. Pero el bloque de criterios interpretados de la búsqueda NL viaja como códigos
+/// sueltos, sin etiquetas, y ahí hace falta esta tabla.
+///
+/// El fallback es el código en vez de un guion: un sector desconocido se lee mejor como
+/// `SIN_CLASIFICAR` que como `—`, y hace obvio que falta agregarlo acá.
+String sectorDisplayName(PortfolioSector sector) => switch (sector) {
+      PortfolioSector.tecnologia => 'Tecnología',
+      PortfolioSector.salud => 'Salud',
+      PortfolioSector.serviciosFinancieros => 'Servicios financieros',
+      PortfolioSector.consumoDiscrecional => 'Consumo discrecional',
+      PortfolioSector.consumoBasico => 'Consumo básico',
+      PortfolioSector.industria => 'Industria',
+      PortfolioSector.energia => 'Energía',
+      PortfolioSector.materiales => 'Materiales',
+      PortfolioSector.serviciosPublicos => 'Servicios públicos',
+      PortfolioSector.bienesRaices => 'Bienes raíces',
+      PortfolioSector.comunicaciones => 'Comunicaciones',
+      PortfolioSector.cripto => 'Cripto',
+      PortfolioSector.sinClasificar => 'Sin clasificar',
+    };
+
 /// Nivel de concentración. El backend lo calcula con umbrales explícitos sobre el peso del sector
 /// dominante y el índice de Herfindahl, tomando el peor de los dos — no se lo pide al modelo, así
 /// que la misma cartera da siempre el mismo veredicto.

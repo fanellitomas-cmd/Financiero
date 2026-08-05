@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../ai/presentation/financial_translator_controller.dart';
+import '../../ai/widgets/financial_translation_card.dart';
 import '../data/deep_intelligence.dart';
 import 'intelligence_common.dart';
 
@@ -13,22 +16,28 @@ import 'intelligence_common.dart';
 /// Las pestañas de fuentes separan reportes oficiales (10-K/10-Q, transcripciones) de noticias
 /// porque tienen peso probatorio distinto: un filing es lo que la empresa afirmó formalmente, una
 /// nota de prensa es lo que alguien reportó.
-class RagSummarySection extends StatefulWidget {
-  const RagSummarySection({super.key, required this.summary});
+class RagSummarySection extends ConsumerStatefulWidget {
+  const RagSummarySection({
+    super.key,
+    required this.summary,
+    required this.ticker,
+  });
 
   final RagSummary summary;
+  final String ticker;
 
   @override
-  State<RagSummarySection> createState() => _RagSummarySectionState();
+  ConsumerState<RagSummarySection> createState() => _RagSummarySectionState();
 }
 
-class _RagSummarySectionState extends State<RagSummarySection> {
+class _RagSummarySectionState extends ConsumerState<RagSummarySection> {
   bool _showFilings = true;
 
   @override
   Widget build(BuildContext context) {
     final summary = widget.summary;
     final isUnavailable = summary.availability == DataAvailability.unavailable;
+    final beginnerMode = ref.watch(beginnerModeProvider);
 
     return Card(
       child: Padding(
@@ -101,11 +110,30 @@ class _RagSummarySectionState extends State<RagSummarySection> {
                       : 'No se citaron noticias en este análisis.',
                 ),
               ],
+              if (beginnerMode)
+                if (_translatableText(summary) case final text?)
+                  FinancialTranslationCard(
+                    text: text,
+                    context: '${widget.ticker} · síntesis de reportes',
+                  ),
             ],
           ],
         ),
       ),
     );
+  }
+
+  /// El titular más los puntos clave y los riesgos: es la síntesis en sí, que es el texto más
+  /// cargado de jerga de toda la Ficha (viene redactado por el modelo sobre reportes contables).
+  ///
+  /// Las fuentes NO entran: son títulos y fechas, no hay nada que traducir ahí.
+  String? _translatableText(RagSummary summary) {
+    final parts = [
+      if (summary.headline != null) summary.headline!,
+      ...summary.keyPoints,
+      if (summary.risks.isNotEmpty) 'Riesgos: ${summary.risks.join(' ')}',
+    ];
+    return parts.isEmpty ? null : parts.join(' ');
   }
 }
 

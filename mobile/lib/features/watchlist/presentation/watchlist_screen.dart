@@ -11,6 +11,7 @@ import '../../asset_detail/presentation/asset_detail_panel.dart';
 import '../../asset_detail/presentation/selected_asset_controller.dart';
 import '../../settings/data/exchange_type.dart';
 import '../../settings/presentation/exchange_selector.dart';
+import '../../tickers/widgets/nl_search_sheet.dart';
 import '../data/watchlist_models.dart';
 import '../widgets/portfolio_audit_sheet.dart';
 import 'add_ticker_dialog.dart';
@@ -38,12 +39,25 @@ class WatchlistScreen extends ConsumerWidget {
   /// vista para saltar entre activos); en mobile no hay lugar para dos paneles, así que se
   /// navega a la ficha como pantalla completa.
   void _openAsset(BuildContext context, WidgetRef ref, WatchlistItem item) {
+    _openTicker(context, ref, item.ticker, assetType: item.assetType);
+  }
+
+  /// Abre un ticker por símbolo, venga de la lista o de la búsqueda conversacional.
+  ///
+  /// El default de `assetType` es STOCK porque el catálogo que busca `search-nl` es de acciones: un
+  /// resultado de esa búsqueda nunca es una cripto.
+  void _openTicker(
+    BuildContext context,
+    WidgetRef ref,
+    String ticker, {
+    AssetType assetType = AssetType.stock,
+  }) {
     if (context.isMasterDetail) {
       ref.read(selectedAssetProvider.notifier).state =
-          SelectedAsset(ticker: item.ticker, assetType: item.assetType);
+          SelectedAsset(ticker: ticker, assetType: assetType);
       return;
     }
-    context.push('/asset/${item.ticker}?assetType=${item.assetType.toJson()}');
+    context.push('/asset/$ticker?assetType=${assetType.toJson()}');
   }
 
   Future<void> _showEditDialog(
@@ -139,6 +153,17 @@ class WatchlistScreen extends ConsumerWidget {
           _AuditAction(
             enabled:
                 (ref.watch(fullWatchlistProvider).valueOrNull ?? []).isNotEmpty,
+          ),
+          IconButton(
+            icon: const Icon(Icons.travel_explore),
+            tooltip: 'Buscar con tus palabras',
+            onPressed: () => NlSearchSheet.show(
+              context,
+              onOpenTicker: (match) {
+                Navigator.of(context).maybePop();
+                _openTicker(context, ref, match.symbol);
+              },
+            ),
           ),
           // El mismo selector que el Dashboard: cambiar de bolsa acá refiltra la lista al toque.
           const ExchangeSelector(),
