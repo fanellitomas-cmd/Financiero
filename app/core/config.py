@@ -36,6 +36,11 @@ class AppSettings(BaseSettings):
     market_summary_cache_ttl_seconds: float = 900.0
     market_summary_movers_per_direction: int = 5
 
+    # La Ficha de Inteligencia Profunda es la operación más cara del sistema (una llamada al LLM
+    # más cuatro a proveedores por ticker), y su contenido —fundamentales trimestrales, síntesis de
+    # reportes, tesis a 1-3 años— no cambia de sentido en una hora.
+    ticker_intelligence_cache_ttl_seconds: float = 3600.0
+
     # Clientes web (el cliente Flutter corriendo en modo web, cualquier frontend futuro) llegan
     # desde otro origen (puerto distinto al de la API) — sin CORS habilitado, el navegador
     # bloquea el preflight OPTIONS antes de que la request real salga (405 Method Not Allowed,

@@ -57,6 +57,10 @@ class FinancialMetrics(BaseModel):
     price_earnings_ratio: MetricValue
     price_earnings_growth_ratio: MetricValue
     debt_to_ebitda: MetricValue
+    # Apalancamiento contra patrimonio, complementario a `debt_to_ebitda` (que lo mide contra
+    # generación de caja): una empresa puede tener poca deuda sobre EBITDA y estar muy
+    # apalancada sobre equity, o al revés. La Ficha de Inteligencia Profunda muestra los dos.
+    debt_to_equity: MetricValue
     free_cash_flow: MetricValue
     free_cash_flow_yield_pct: MetricValue
     revenue_growth_yoy_pct: MetricValue

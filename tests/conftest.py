@@ -15,6 +15,7 @@ from sqlalchemy.pool import StaticPool
 from app import models as _models  # noqa: F401  registra las tablas en Base.metadata
 from app.core.database import Base, get_db, get_session_factory
 from app.main import app
+from app.services.ticker_intelligence_service import TickerIntelligenceService
 
 
 @pytest.fixture
@@ -53,6 +54,11 @@ async def client(
     app.state.chat_service = None
     app.state.market_data_service = None
     app.state.market_summary_service = None
+    # La Ficha de Inteligencia se instancia sin ningún cliente: todos sus bloques degradan y los
+    # tests que quieran el camino con datos la sobreescriben con los dobles que necesiten.
+    app.state.ticker_intelligence_service = TickerIntelligenceService(
+        system_prompt="Prompt de prueba."
+    )
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(

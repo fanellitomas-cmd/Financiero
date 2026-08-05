@@ -43,6 +43,12 @@ _DEBT_TO_EBITDA_KEYS = (
     "debtToEbitda",
     "debtToEBITDATTM",
 )
+_DEBT_TO_EQUITY_KEYS = (
+    "debtToEquityRatio",
+    "debtToEquityRatioTTM",
+    "debtEquityRatio",
+    "debtEquityRatioTTM",
+)
 _CURRENT_RATIO_KEYS = ("currentRatio", "currentRatioTTM")
 _GROSS_MARGIN_KEYS = ("grossProfitMargin", "grossProfitMarginTTM")
 _OPERATING_MARGIN_KEYS = ("operatingProfitMargin", "operatingProfitMarginTTM")
@@ -248,6 +254,18 @@ class FMPClient:
                         _DEBT_TO_EBITDA_KEYS,
                         key_metrics_source,
                     )
+                ],
+                as_of=fetched_at,
+            ),
+            debt_to_equity=_resolve_metric(
+                [
+                    (ratios, ratios_status, _DEBT_TO_EQUITY_KEYS, ratios_source),
+                    (
+                        key_metrics,
+                        key_metrics_status,
+                        _DEBT_TO_EQUITY_KEYS,
+                        key_metrics_source,
+                    ),
                 ],
                 as_of=fetched_at,
             ),

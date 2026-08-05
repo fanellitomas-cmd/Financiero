@@ -19,6 +19,7 @@ from app.services.chat_service import ChatService
 from app.services.market_data_service import MarketDataService
 from app.services.market_summary_service import MarketSummaryService
 from app.services.ticker_catalog_service import TickerCatalogService
+from app.services.ticker_intelligence_service import TickerIntelligenceService
 
 _oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
@@ -158,3 +159,29 @@ def get_ticker_catalog_service(
 
 
 TickerCatalog = Annotated[TickerCatalogService, Depends(get_ticker_catalog_service)]
+
+
+def get_ticker_intelligence_service(request: Request) -> TickerIntelligenceService:
+    """El `TickerIntelligenceService` se construye una vez en el lifespan, envolviendo los mismos
+    clientes de FMP/Tavily/Gemini que ya usa el motor.
+
+    A diferencia de los otros servicios, este **no** devuelve 503 por falta de credenciales: se
+    instancia siempre, porque cada cliente ausente degrada solo su bloque de la Ficha y la respuesta
+    sigue teniendo forma válida. Un 503 acá obligaría al cliente a traducir "no configurado" a una
+    Ficha vacía, que es exactamente el trabajo que el servicio ya hace.
+    """
+
+    service = getattr(request.app.state, "ticker_intelligence_service", None)
+    if not isinstance(service, TickerIntelligenceService):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="La Ficha de Inteligencia Profunda no está disponible en este momento.",
+        )
+    return service
+
+
+# `...Dep` y no `TickerIntelligence` a secas: ese nombre ya es el schema de respuesta
+# (`app/schemas/intelligence.py`), y tener los dos en scope confundiría en cada endpoint.
+TickerIntelligenceDep = Annotated[
+    TickerIntelligenceService, Depends(get_ticker_intelligence_service)
+]

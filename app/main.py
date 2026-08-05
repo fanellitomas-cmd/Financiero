@@ -26,6 +26,7 @@ from app.services.market_data_service import MarketDataService
 from app.services.market_summary_service import MarketSummaryService
 from app.services.push_service import PushNotificationService, TickerConnectionManager
 from app.services.scheduler import AgentScheduler
+from app.services.ticker_intelligence_service import TickerIntelligenceService
 from src.composition import build_ingestion_backed_dependencies
 from src.core.config import settings as agent_settings
 from src.ingestion.fmp_client import FMPClient
@@ -159,6 +160,27 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             extra={"hint": "falta GEMINI_API_KEY; /api/v1/chat devolverá 503"},
         )
         app.state.chat_service = None
+
+    # La Ficha de Inteligencia Profunda se instancia SIEMPRE, con los clientes que haya: cada uno
+    # ausente degrada solo su bloque (fundamentales / síntesis / proyecciones) y la respuesta sigue
+    # teniendo forma válida. Es el único servicio que no puede quedar en None.
+    app.state.ticker_intelligence_service = TickerIntelligenceService(
+        fmp_client=fmp,
+        tavily_client=tavily,
+        gemini_client=gemini,
+        cache_ttl_seconds=app_settings.ticker_intelligence_cache_ttl_seconds,
+    )
+    if fmp is None or gemini is None:
+        logger.warning(
+            "ticker_intelligence_partially_configured",
+            extra={
+                "hint": (
+                    "faltan FMP_API_KEY y/o GEMINI_API_KEY; "
+                    "/api/v1/tickers/{ticker}/intelligence servirá los bloques que pueda con "
+                    "availability=UNAVAILABLE en el resto"
+                )
+            },
+        )
 
     if (
         polygon is not None

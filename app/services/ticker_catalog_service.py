@@ -152,6 +152,20 @@ class TickerCatalogService:
             )
             return list(rows.all()), total or 0
 
+    async def find_name(self, symbol: str) -> str | None:
+        """Nombre de la empresa según el catálogo, o `None` si el símbolo no está.
+
+        Lo usa la Ficha de Inteligencia Profunda para titularla con el nombre además del símbolo.
+        `None` no es un error: el catálogo cubre acciones de NASDAQ/NYSE, así que una cripto o un
+        listado reciente caen acá y la Ficha se muestra igual, solo sin el nombre.
+        """
+
+        async with self._session_factory() as session:
+            found = await session.scalar(
+                select(Ticker.name).where(Ticker.symbol == symbol.upper())
+            )
+        return found if isinstance(found, str) else None
+
     async def find_exchange(self, symbol: str) -> ExchangeType | None:
         """Bolsa de un símbolo según el catálogo, o `None` si no está. Lo usa
         `POST /api/v1/watchlist` para enriquecer el item sin pedirle el dato al usuario.
