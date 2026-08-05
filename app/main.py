@@ -24,6 +24,7 @@ from app.services.agent_runner_service import AgentRunnerService
 from app.services.chat_service import ChatService
 from app.services.market_data_service import MarketDataService
 from app.services.market_summary_service import MarketSummaryService
+from app.services.portfolio_audit_service import PortfolioAuditService
 from app.services.push_service import PushNotificationService, TickerConnectionManager
 from app.services.scheduler import AgentScheduler
 from app.services.ticker_intelligence_service import TickerIntelligenceService
@@ -178,6 +179,34 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                     "faltan FMP_API_KEY y/o GEMINI_API_KEY; "
                     "/api/v1/tickers/{ticker}/intelligence servirá los bloques que pueda con "
                     "availability=UNAVAILABLE en el resto"
+                )
+            },
+        )
+
+    # La Auditoría de Portafolio también se instancia SIEMPRE, por el mismo motivo: la
+    # distribución por sector y la concentración se calculan sobre la watchlist del usuario, que
+    # es dato propio de la app. Sin FMP los sectores caen a "Sin clasificar", sin Polygon las
+    # correlaciones caen a la heurística por sector, y sin Gemini no hay narrativa — cada ausencia
+    # degrada su bloque y ninguna vacía la auditoría.
+    app.state.portfolio_audit_service = PortfolioAuditService(
+        async_session_factory,
+        fmp_client=fmp,
+        polygon_client=polygon,
+        gemini_client=gemini,
+        cache_ttl_seconds=app_settings.portfolio_audit_cache_ttl_seconds,
+        correlation_window_days=app_settings.portfolio_audit_correlation_window_days,
+        correlation_threshold=app_settings.portfolio_audit_correlation_threshold,
+        min_correlation_observations=app_settings.portfolio_audit_min_observations,
+        max_history_tickers=app_settings.portfolio_audit_max_history_tickers,
+    )
+    if fmp is None or polygon is None or gemini is None:
+        logger.warning(
+            "portfolio_audit_partially_configured",
+            extra={
+                "hint": (
+                    "faltan FMP_API_KEY/POLYGON_API_KEY/GEMINI_API_KEY; "
+                    "/api/v1/watchlist/audit servirá los bloques que pueda con su "
+                    "degradation_reason explicando el resto"
                 )
             },
         )

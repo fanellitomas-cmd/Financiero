@@ -14,11 +14,18 @@ from app.api.v1 import (
     market,
     tickers,
     watchlist,
+    watchlist_alerts,
+    watchlist_audit,
     websocket,
 )
 
 api_v1_router = APIRouter(prefix="/api/v1")
 api_v1_router.include_router(auth.router)
+# Las rutas literales de `/watchlist` van ANTES del ABM: FastAPI resuelve en orden de registro, y
+# `PATCH /watchlist/{item_id}` declarado primero se comería `PATCH /watchlist/alerts/{rule_id}`
+# intentando leer "alerts" como un UUID.
+api_v1_router.include_router(watchlist_audit.router)
+api_v1_router.include_router(watchlist_alerts.router)
 api_v1_router.include_router(watchlist.router)
 api_v1_router.include_router(devices.router)
 api_v1_router.include_router(alerts.router)

@@ -30,6 +30,48 @@ class DevicePlatform(str, Enum):
     WEB = "WEB"
 
 
+class AlertRuleType(str, Enum):
+    """Tipo de regla de alerta configurada por el usuario sobre un item de su Watchlist.
+
+    `PRICE` es la regla clásica (variación porcentual). Las otras dos son contextuales: no miran
+    el precio sino la INTERPRETACIÓN que el motor produjo sobre el activo — la severidad de la
+    noticia y la dirección proyectada por horizonte. Esa distinción es el punto: un umbral de
+    precio no distingue una caída del 5% por nerviosismo de una del 5% por deterioro real, y esa
+    diferencia es justamente lo que el motor calcula.
+    """
+
+    PRICE = "PRICE"
+    NEWS_SEVERITY = "NEWS_SEVERITY"
+    TREND_BREAK = "TREND_BREAK"
+
+
+class TrendHorizon(str, Enum):
+    """Horizonte de una regla `TREND_BREAK`, en el vocabulario del producto.
+
+    Se mapea a los `horizon` del motor (`CORTO_1_14D` / `MEDIANO_1_6M` / `LARGO_1_3A`, ver
+    `src/validation/domain_models.py::HorizonScenarios`) en
+    `app/services/watchlist_alert_service.py`. Se declara aparte y no se reutiliza el Literal del
+    motor para que el contrato de la API no cambie si el motor renombra sus horizontes.
+    """
+
+    CORTO = "CORTO"
+    MEDIANO = "MEDIANO"
+    LARGO = "LARGO"
+
+
+class TrendBreakDirection(str, Enum):
+    """Qué quiebre de tendencia le interesa al usuario.
+
+    `BAJISTA` es el default del producto (avisar cuando la proyección se da vuelta en contra),
+    pero `ALCISTA` es un caso real: alguien esperando un punto de entrada quiere saber cuándo la
+    tendencia se da vuelta a favor. `CUALQUIERA` cubre ambos.
+    """
+
+    BAJISTA = "BAJISTA"
+    ALCISTA = "ALCISTA"
+    CUALQUIERA = "CUALQUIERA"
+
+
 class ExchangeType(str, Enum):
     """Bolsa normalizada, en el vocabulario del producto — es lo que filtra
     `GET /api/v1/tickers?exchange=...` y lo que elige el usuario en la app (ver

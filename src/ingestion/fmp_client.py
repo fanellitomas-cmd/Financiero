@@ -28,7 +28,7 @@ from src.core.exceptions import (
     ProviderTimeoutError,
 )
 from src.core.http_utils import request_with_retries
-from src.ingestion.schemas_raw import FilingReference
+from src.ingestion.schemas_raw import CompanyProfile, FilingReference
 from src.validation.domain_models import DataStatus, FinancialMetrics, MetricValue
 
 logger = logging.getLogger(__name__)
@@ -63,6 +63,9 @@ _SHARES_OUTSTANDING_KEYS = (
 )
 _FREE_CASH_FLOW_KEYS = ("freeCashFlow",)
 _REPORT_DATE_KEYS = ("date", "fiscalDateEnding")
+_SECTOR_KEYS = ("sector",)
+_INDUSTRY_KEYS = ("industry",)
+_COMPANY_NAME_KEYS = ("companyName", "name")
 
 
 def _first_present(payload: dict[str, Any], keys: tuple[str, ...]) -> Any:
@@ -78,6 +81,17 @@ def _first_object(payload: Any) -> dict[str, Any] | None:
     if isinstance(payload, dict):
         return payload
     return None
+
+
+def _str_or_none(raw: Any) -> str | None:
+    """Texto del proveedor, o `None` si no es un string usable. Un `""` se trata como ausente: un
+    sector vacío no es un sector.
+    """
+
+    if not isinstance(raw, str):
+        return None
+    stripped = raw.strip()
+    return stripped or None
 
 
 def _to_decimal(raw: Any) -> Decimal | None:
@@ -319,6 +333,30 @@ class FMPClient:
             fundamentals_report_date=_parse_datetime(
                 _first_present(cash_flow, _REPORT_DATE_KEYS) if cash_flow else None
             ),
+        )
+
+    async def get_company_profile(self, ticker: str) -> CompanyProfile | None:
+        """Perfil de la empresa (`/profile`): sector, industria y nombre.
+
+        Devuelve `None` si el proveedor falló o no conoce el símbolo, en vez de un perfil con todos
+        los campos vacíos: quien lo consume necesita distinguir "no lo pudimos preguntar" de "la
+        empresa no tiene sector asignado", y un objeto lleno de `None` no permite esa distinción.
+        Un perfil que SÍ llegó pero sin sector devuelve el objeto con `sector=None`.
+        """
+
+        payload, status = await self._fetch_json("/profile", {"symbol": ticker})
+        if status != DataStatus.OK:
+            return None
+
+        profile = _first_object(payload)
+        if profile is None:
+            return None
+
+        return CompanyProfile(
+            ticker=ticker,
+            company_name=_str_or_none(_first_present(profile, _COMPANY_NAME_KEYS)),
+            sector=_str_or_none(_first_present(profile, _SECTOR_KEYS)),
+            industry=_str_or_none(_first_present(profile, _INDUSTRY_KEYS)),
         )
 
     async def list_recent_filings(

@@ -115,6 +115,24 @@ class FilingReference(BaseModel):
     final_document_url: str | None
 
 
+class CompanyProfile(BaseModel):
+    """Perfil de la empresa según FMP `/profile`: sector e industria en el vocabulario del
+    proveedor, sin interpretar.
+
+    `sector` e `industry` son `str | None` y no un enum: el vocabulario lo define el proveedor
+    (`Technology`, `Consumer Cyclical`…) y normalizarlo al del producto es decisión de la capa de
+    aplicación (.cursorrules §3). `None` es un caso normal, no un error — un ETF o un ADR pueden no
+    tener sector asignado.
+    """
+
+    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
+
+    ticker: str
+    company_name: str | None
+    sector: str | None
+    industry: str | None
+
+
 class NewsSearchResult(BaseModel):
     """Salida de `TavilyClient`: artículos ya limpios de ruido HTML, listos para el RAG del
     Nodo 2. `articles` vacío + `status != OK` es una búsqueda fallida, no "sin noticias".

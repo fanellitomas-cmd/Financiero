@@ -7,5 +7,13 @@ from app.models.device_token import DeviceToken
 from app.models.ticker import Ticker
 from app.models.user import User
 from app.models.watchlist import WatchlistItem
+from app.models.watchlist_alert_rule import WatchlistAlertRule
 
-__all__ = ["AlertHistory", "DeviceToken", "Ticker", "User", "WatchlistItem"]
+__all__ = [
+    "AlertHistory",
+    "DeviceToken",
+    "Ticker",
+    "User",
+    "WatchlistAlertRule",
+    "WatchlistItem",
+]

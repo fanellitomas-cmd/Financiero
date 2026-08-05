@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as postgres_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -101,6 +101,9 @@ class TickerCatalogService:
             await session.execute(
                 statement.on_conflict_do_update(
                     index_elements=["symbol"],
+                    # `sector` NO está en el `set_` a propósito: Polygon no lo devuelve, y
+                    # actualizarlo acá lo pisaría con NULL en cada sincronización, tirando el
+                    # trabajo que ya hizo la auditoría al resolverlo contra FMP.
                     set_={
                         "name": statement.excluded.name,
                         "primary_exchange": statement.excluded.primary_exchange,
@@ -165,6 +168,69 @@ class TickerCatalogService:
                 select(Ticker.name).where(Ticker.symbol == symbol.upper())
             )
         return found if isinstance(found, str) else None
+
+    async def find_sectors(self, symbols: list[str]) -> dict[str, str]:
+        """Sectores (crudos, vocabulario del proveedor) de los símbolos que el catálogo ya conoce.
+
+        Una sola consulta para toda la lista, no una por símbolo: la Auditoría de Portafolio la
+        llama con la watchlist entera. Los símbolos sin sector guardado simplemente no aparecen en
+        el dict devuelto — el llamador decide si vale la pena resolverlos contra el proveedor.
+        """
+
+        normalized = [symbol.upper() for symbol in symbols]
+        if not normalized:
+            return {}
+
+        async with self._session_factory() as session:
+            rows = (
+                await session.execute(
+                    select(Ticker.symbol, Ticker.sector).where(
+                        Ticker.symbol.in_(normalized), Ticker.sector.is_not(None)
+                    )
+                )
+            ).all()
+
+        return {symbol: sector for symbol, sector in rows if isinstance(sector, str)}
+
+    async def store_sectors(self, sectors: dict[str, str]) -> int:
+        """Guarda los sectores resueltos contra el proveedor de fundamentales, para los símbolos
+        que ya están en el catálogo. Devuelve cuántas filas se actualizaron.
+
+        Es un write-through de caché: el sector de un símbolo es igual para todos los usuarios y no
+        cambia de mes a mes, así que resolverlo una vez y persistirlo evita una llamada a FMP por
+        símbolo en cada auditoría.
+
+        Deliberadamente NO inserta símbolos ausentes. El catálogo lo puebla la sincronización con
+        Polygon, que es la que sabe nombre, bolsa y estado; crear acá una fila con solo símbolo y
+        sector metería un registro incompleto que el resto de la app leería como un ticker real
+        (aparecería en `GET /tickers` sin nombre ni bolsa). Una cripto o un símbolo no sincronizado
+        se queda sin persistir y se resuelve de nuevo la próxima vez — el costo de un `/profile`
+        contra un dato inventado en el catálogo.
+        """
+
+        if not sectors:
+            return 0
+
+        normalized = {symbol.upper(): sector for symbol, sector in sectors.items()}
+        async with self._session_factory() as session:
+            # Se consulta primero qué símbolos existen en vez de mirar el `rowcount` de cada
+            # UPDATE: el conteo devuelto por el driver es la cantidad de filas que la base tocó, que
+            # no distingue "el símbolo no está en el catálogo" de "ya tenía ese mismo sector".
+            existing = set(
+                (
+                    await session.scalars(
+                        select(Ticker.symbol).where(Ticker.symbol.in_(normalized))
+                    )
+                ).all()
+            )
+            for symbol in existing:
+                await session.execute(
+                    update(Ticker)
+                    .where(Ticker.symbol == symbol)
+                    .values(sector=normalized[symbol])
+                )
+            await session.commit()
+        return len(existing)
 
     async def find_exchange(self, symbol: str) -> ExchangeType | None:
         """Bolsa de un símbolo según el catálogo, o `None` si no está. Lo usa

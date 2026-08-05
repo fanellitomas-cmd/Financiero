@@ -18,8 +18,10 @@ from app.services.agent_runner_service import AgentRunnerService
 from app.services.chat_service import ChatService
 from app.services.market_data_service import MarketDataService
 from app.services.market_summary_service import MarketSummaryService
+from app.services.portfolio_audit_service import PortfolioAuditService
 from app.services.ticker_catalog_service import TickerCatalogService
 from app.services.ticker_intelligence_service import TickerIntelligenceService
+from app.services.watchlist_alert_service import WatchlistAlertRuleService
 
 _oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
@@ -184,4 +186,45 @@ def get_ticker_intelligence_service(request: Request) -> TickerIntelligenceServi
 # (`app/schemas/intelligence.py`), y tener los dos en scope confundiría en cada endpoint.
 TickerIntelligenceDep = Annotated[
     TickerIntelligenceService, Depends(get_ticker_intelligence_service)
+]
+
+
+def get_portfolio_audit_service(request: Request) -> PortfolioAuditService:
+    """La Auditoría de Portafolio se construye una vez en el lifespan, reutilizando los mismos
+    clientes de FMP/Polygon/Gemini que ya usa el motor.
+
+    Igual que la Ficha de Inteligencia Profunda, **no** devuelve 503 por falta de credenciales: la
+    distribución por sector y la concentración se calculan sobre la watchlist del usuario, que es
+    dato propio, y cada cliente ausente degrada solo su bloque.
+    """
+
+    service = getattr(request.app.state, "portfolio_audit_service", None)
+    if not isinstance(service, PortfolioAuditService):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="La auditoría de portafolio no está disponible en este momento.",
+        )
+    return service
+
+
+# `...Dep` por el mismo motivo que arriba: `PortfolioAudit` ya es el schema de respuesta.
+PortfolioAuditDep = Annotated[
+    PortfolioAuditService, Depends(get_portfolio_audit_service)
+]
+
+
+def get_watchlist_alert_rule_service(
+    session_factory: Annotated[
+        async_sessionmaker[AsyncSession], Depends(get_session_factory)
+    ],
+) -> WatchlistAlertRuleService:
+    """Como `TickerCatalogService`, se construye por request: no envuelve ningún cliente HTTP de
+    larga vida (solo lee y escribe la base local) y nunca puede fallar con 503 por credenciales.
+    """
+
+    return WatchlistAlertRuleService(session_factory)
+
+
+WatchlistAlertRules = Annotated[
+    WatchlistAlertRuleService, Depends(get_watchlist_alert_rule_service)
 ]

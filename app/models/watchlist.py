@@ -16,6 +16,7 @@ from app.models.enums import AssetType, ExchangeType
 
 if TYPE_CHECKING:
     from app.models.user import User
+    from app.models.watchlist_alert_rule import WatchlistAlertRule
 
 
 class WatchlistItem(Base):
@@ -32,6 +33,10 @@ class WatchlistItem(Base):
     asset_type: Mapped[AssetType] = mapped_column(
         SAEnum(AssetType, native_enum=False, length=16), nullable=False
     )
+    # Umbral de la regla de precio. Sigue viviendo acá (y no solo en `watchlist_alert_rules`)
+    # porque es el único parámetro de alerta que la app expone desde antes de las reglas
+    # contextuales, y moverlo rompería `GET /watchlist`. `WatchlistAlertRuleService` mantiene los
+    # dos lados sincronizados: hay un solo umbral efectivo por ticker, no dos que se contradigan.
     alert_threshold_pct: Mapped[Decimal] = mapped_column(
         Numeric(5, 2),
         nullable=False,
@@ -50,3 +55,18 @@ class WatchlistItem(Base):
     )
 
     user: Mapped[User] = relationship("User", back_populates="watchlist_items")
+
+    # `lazy="selectin"` no: las reglas se consultan explícitamente cuando se las necesita (la API
+    # de reglas y el filtrado de despacho), y cargarlas en cada `GET /watchlist` sería un JOIN por
+    # cada listado que la pantalla de watchlist no usa.
+    #
+    # Sin `passive_deletes=True`, a propósito: la FK declara `ON DELETE CASCADE`, pero SQLite —la
+    # base de desarrollo y la de los tests— ignora las foreign keys salvo que se prenda
+    # `PRAGMA foreign_keys=ON` por conexión, así que delegar el borrado en la base dejaría reglas
+    # huérfanas apuntando a un item que ya no existe. Con el cascade del ORM, borrar el ticker se
+    # lleva su configuración en cualquier motor, al costo de un SELECT extra en el delete.
+    alert_rules: Mapped[list[WatchlistAlertRule]] = relationship(
+        "WatchlistAlertRule",
+        back_populates="item",
+        cascade="all, delete-orphan",
+    )

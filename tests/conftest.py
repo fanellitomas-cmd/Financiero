@@ -15,6 +15,7 @@ from sqlalchemy.pool import StaticPool
 from app import models as _models  # noqa: F401  registra las tablas en Base.metadata
 from app.core.database import Base, get_db, get_session_factory
 from app.main import app
+from app.services.portfolio_audit_service import PortfolioAuditService
 from app.services.ticker_intelligence_service import TickerIntelligenceService
 
 
@@ -58,6 +59,12 @@ async def client(
     # tests que quieran el camino con datos la sobreescriben con los dobles que necesiten.
     app.state.ticker_intelligence_service = TickerIntelligenceService(
         system_prompt="Prompt de prueba."
+    )
+    # Ídem la Auditoría de Portafolio: sin clientes, calcula distribución y concentración sobre la
+    # watchlist del test y declara degradado el resto. Los tests que quieran sectores reales o
+    # narrativa la sobreescriben con los dobles que necesiten.
+    app.state.portfolio_audit_service = PortfolioAuditService(
+        db_session_factory, system_prompt="Prompt de prueba."
     )
 
     transport = httpx.ASGITransport(app=app)

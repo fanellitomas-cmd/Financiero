@@ -41,6 +41,26 @@ class AppSettings(BaseSettings):
     # reportes, tesis a 1-3 años— no cambia de sentido en una hora.
     ticker_intelligence_cache_ttl_seconds: float = 3600.0
 
+    # La auditoría cruza la watchlist entera contra dos proveedores (sector por símbolo nuevo,
+    # histórico diario por símbolo) más una llamada al modelo. Su resultado depende de la
+    # composición de la cartera, que cambia cuando el usuario agrega o quita un ticker — y eso ya
+    # invalida la caché por sí solo (la clave incluye la huella de la watchlist), así que el TTL
+    # solo cubre el envejecimiento de los precios.
+    portfolio_audit_cache_ttl_seconds: float = 3600.0
+    # 90 días de rueda son ~60 observaciones: suficiente para que una correlación signifique algo y
+    # corto como para que refleje el régimen actual del mercado y no el de hace dos años.
+    portfolio_audit_correlation_window_days: int = 90
+    # 0.8 es alto a propósito. El objetivo es marcar activos que se mueven casi como uno solo, no
+    # constatar que dos acciones del mismo índice se parecen: con un umbral de 0.5 medio S&P 500
+    # aparecería advertido y la señal dejaría de significar nada.
+    portfolio_audit_correlation_threshold: float = 0.8
+    # Debajo de esto no se afirma una correlación: con pocos días en común el coeficiente es ruido
+    # con forma de número.
+    portfolio_audit_min_observations: int = 30
+    # Tope de símbolos a los que se les pide histórico en una auditoría, para que una watchlist
+    # enorme no convierta un endpoint de lectura en una tormenta de tráfico contra el proveedor.
+    portfolio_audit_max_history_tickers: int = 25
+
     # Clientes web (el cliente Flutter corriendo en modo web, cualquier frontend futuro) llegan
     # desde otro origen (puerto distinto al de la API) — sin CORS habilitado, el navegador
     # bloquea el preflight OPTIONS antes de que la request real salga (405 Method Not Allowed,

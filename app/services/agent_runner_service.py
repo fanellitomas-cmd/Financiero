@@ -26,6 +26,7 @@ from src.core.state import AgentState
 from src.processing.graph import build_graph
 from src.validation.domain_models import (
     AssetClass,
+    MarketAlert,
     PushNotificationPayload,
     UserProfile,
     WatchedAsset,
@@ -114,7 +115,7 @@ class AgentRunnerService:
         if cached is not None:
             return cached
 
-        payload = await self._invoke_graph(normalized_ticker, asset_type)
+        payload, _ = await self._invoke_graph(normalized_ticker, asset_type)
         if payload is None:
             raise AssetIntelligenceUnavailableError(normalized_ticker)
 
@@ -153,7 +154,15 @@ class AgentRunnerService:
 
     async def _invoke_graph(
         self, ticker: str, asset_type: AssetType
-    ) -> PushNotificationPayload | None:
+    ) -> tuple[PushNotificationPayload | None, MarketAlert | None]:
+        """Corre el grafo y devuelve el payload junto con la `MarketAlert` que lo originó.
+
+        La alerta viaja además del payload porque el payload no lleva la magnitud del disparador
+        (ver `src/notification/payload_builder.py`), y es el único dato con el que una regla de
+        alerta por precio puede decidir. Sale de acá y no se re-deriva después porque el estado del
+        grafo es el único lugar donde existe.
+        """
+
         asset = WatchedAsset(
             ticker=ticker, asset_class=_ASSET_TYPE_TO_ASSET_CLASS[asset_type]
         )
@@ -164,13 +173,17 @@ class AgentRunnerService:
             )
         )
         payload = final_state.get("notification_payload")
-        return payload if isinstance(payload, PushNotificationPayload) else None
+        alert = final_state.get("market_alert")
+        return (
+            payload if isinstance(payload, PushNotificationPayload) else None,
+            alert if isinstance(alert, MarketAlert) else None,
+        )
 
     async def _run_single_ticker(
         self, ticker: str, asset_type: AssetType
     ) -> TickerRunResult:
         try:
-            payload = await self._invoke_graph(ticker, asset_type)
+            payload, market_alert = await self._invoke_graph(ticker, asset_type)
         except Exception as exc:  # noqa: BLE001 — límite de un job por lote: se degrada y
             # se registra explícitamente en vez de propagar, para que un ticker roto (red,
             # proveedor caído, bug) no tumbe la corrida completa del cron sobre el resto de
@@ -195,7 +208,9 @@ class AgentRunnerService:
         # corrida in-process: esta app ES el backend propio, así que el despacho real
         # (avisar a los watchers + persistir) lo hace PushNotificationService acá, no un
         # segundo salto HTTP de vuelta hacia sí misma.
-        dispatch_result = await self._push_service.dispatch_to_watchers(payload)
+        dispatch_result = await self._push_service.dispatch_to_watchers(
+            payload, market_alert=market_alert
+        )
         push_dispatched = (
             dispatch_result.fcm_dispatched
             or dispatch_result.websocket_delivered_count > 0

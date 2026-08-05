@@ -44,6 +44,17 @@ class Ticker(Base):
     # `app/models/enums.py`) — son dos vocabularios distintos y no se mezclan.
     asset_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
+    # Sector en el vocabulario del proveedor de fundamentales (`Technology`, `Healthcare`…), tal
+    # como lo devuelve FMP `/profile`. Polygon NO trae sector, así que esta columna la completa la
+    # Auditoría de Portafolio cuando resuelve un símbolo por primera vez (write-through), no la
+    # sincronización del catálogo — y por eso el upsert de `sync_from_polygon` la deja intacta en
+    # vez de sobreescribirla con NULL en cada corrida.
+    #
+    # Se guarda el valor crudo del proveedor, no el `PortfolioSector` normalizado del producto:
+    # mismo criterio que `primary_exchange` contra `exchange` — si el mapeo del producto cambia,
+    # se recalcula desde acá sin volver a pegarle a FMP por cada símbolo.
+    sector: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     updated_at: Mapped[datetime] = mapped_column(
