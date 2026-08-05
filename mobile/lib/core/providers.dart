@@ -12,6 +12,8 @@ import '../features/dashboard/data/market_summary_repository.dart';
 import '../features/settings/data/exchange_type.dart';
 import '../features/settings/presentation/exchange_controller.dart';
 import '../features/tickers/data/ticker_repository.dart';
+import '../features/watchlist/data/watchlist_alerts_repository.dart';
+import '../features/watchlist/data/watchlist_audit_repository.dart';
 import '../features/watchlist/data/watchlist_repository.dart';
 import 'config/app_config.dart';
 import 'network/api_client.dart';
@@ -75,6 +77,16 @@ final authControllerProvider = StateNotifierProvider<AuthController, AuthState>(
 
 final watchlistRepositoryProvider = Provider<WatchlistRepository>(
   (ref) => WatchlistRepository(ref.watch(apiClientProvider)),
+);
+
+final watchlistAuditRepositoryProvider = Provider<WatchlistAuditRepository>(
+  (ref) => WatchlistAuditRepository(ref.watch(apiClientProvider)),
+);
+
+/// Reglas de alerta de la Watchlist (`/watchlist/alerts`) — la configuración de qué avisar. No
+/// confundir con `alertsRepositoryProvider`, que lee el historial de lo ya avisado (`/alerts`).
+final watchlistAlertsRepositoryProvider = Provider<WatchlistAlertsRepository>(
+  (ref) => WatchlistAlertsRepository(ref.watch(apiClientProvider)),
 );
 
 final chatRepositoryProvider = Provider<ChatRepository>(

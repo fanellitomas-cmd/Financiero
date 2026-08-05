@@ -9,18 +9,14 @@ library;
 
 import 'package:flutter/foundation.dart';
 
-/// Estado de un bloque de la Ficha. `partial` es un estado real y frecuente (un ticker con P/E
-/// pero sin PEG), distinto tanto de "todo bien" como de "no hay nada".
-enum DataAvailability { available, partial, unavailable }
+import '../../../core/data/data_availability.dart';
 
-/// `unavailable` ante un valor desconocido: es el fallback seguro — la UI muestra el banner
-/// informativo en vez de presentar un bloque vacío como si tuviera datos.
-DataAvailability availabilityFromWire(String? value) => switch (value) {
-      'AVAILABLE' => DataAvailability.available,
-      'PARTIAL' => DataAvailability.partial,
-      'UNAVAILABLE' => DataAvailability.unavailable,
-      _ => DataAvailability.unavailable,
-    };
+// Se re-exporta para que todo lo que ya importaba `DataAvailability` desde acá siga funcionando:
+// el enum se mudó a `core/` cuando la Auditoría de Portafolio pasó a usar el mismo contrato, y
+// mover el símbolo sin re-exportarlo habría roto a cada consumidor de la Ficha sin ninguna razón
+// de fondo.
+export '../../../core/data/data_availability.dart'
+    show DataAvailability, availabilityFromWire;
 
 /// Semáforo de salud financiera. Lo calcula el backend en código con umbrales explícitos (no el
 /// LLM), así que es determinístico: los mismos ratios dan siempre el mismo veredicto.

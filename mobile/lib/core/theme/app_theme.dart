@@ -40,6 +40,37 @@ class AppTheme {
   /// "sucio" contra los fondos azulados.
   static const Color textMuted = Color(0xFF94A3B8);
 
+  // --- Paleta categórica ------------------------------------------------------------------
+  /// Colores para distinguir categorías entre sí (sectores de una cartera, series de un gráfico).
+  ///
+  /// Deliberadamente SIN verde ni rojo: en esta app esos dos significan dirección del movimiento,
+  /// y un sector pintado de verde se leería como "este sector está subiendo", que es una
+  /// afirmación que un gráfico de distribución no hace.
+  ///
+  /// El orden importa y es estable: quien la use debe indexar por una propiedad fija de la
+  /// categoría (la posición del sector en su enum, por ejemplo), nunca por la posición en la lista
+  /// que está dibujando — si no, un sector cambia de color cuando otro entra o sale de la cartera
+  /// y la comparación entre dos auditorías deja de ser posible de un vistazo.
+  static const List<Color> categoricalPalette = [
+    Color(0xFF22D3EE), // cian
+    Color(0xFF818CF8), // índigo
+    Color(0xFFE879F9), // fucsia
+    Color(0xFFFBBF24), // ámbar
+    Color(0xFF38BDF8), // celeste
+    Color(0xFFA78BFA), // violeta
+    Color(0xFF2DD4BF), // turquesa
+    Color(0xFFFB923C), // naranja
+    Color(0xFF60A5FA), // azul
+    Color(0xFFF472B6), // rosa
+    Color(0xFFC084FC), // lila
+    Color(0xFF34D399), // menta
+  ];
+
+  /// Color de la categoría número `index`. Cicla si hay más categorías que colores — repetir un
+  /// tono es preferible a generar uno al azar, que podría caer en el verde/rojo reservados.
+  static Color categorical(int index) =>
+      categoricalPalette[index % categoricalPalette.length];
+
   static const double radius = 12;
 
   static BoxDecoration get panelDecoration => BoxDecoration(
