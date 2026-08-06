@@ -11,8 +11,10 @@ from app.api.v1 import (
     auth,
     chat,
     devices,
+    folders,
     internal,
     market,
+    notes,
     tickers,
     watchlist,
     watchlist_alerts,
@@ -35,5 +37,7 @@ api_v1_router.include_router(chat.router)
 api_v1_router.include_router(ai.router)
 api_v1_router.include_router(market.router)
 api_v1_router.include_router(tickers.router)
+api_v1_router.include_router(folders.router)
+api_v1_router.include_router(notes.router)
 api_v1_router.include_router(internal.router)
 api_v1_router.include_router(websocket.router)

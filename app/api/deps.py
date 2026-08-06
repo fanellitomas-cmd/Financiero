@@ -19,6 +19,7 @@ from app.services.chat_service import ChatService
 from app.services.financial_translator_service import FinancialTranslatorService
 from app.services.market_data_service import MarketDataService
 from app.services.market_summary_service import MarketSummaryService
+from app.services.notes_service import NotesService
 from app.services.portfolio_audit_service import PortfolioAuditService
 from app.services.ticker_catalog_service import TickerCatalogService
 from app.services.ticker_intelligence_service import TickerIntelligenceService
@@ -274,3 +275,22 @@ def get_financial_translator_service(request: Request) -> FinancialTranslatorSer
 FinancialTranslatorDep = Annotated[
     FinancialTranslatorService, Depends(get_financial_translator_service)
 ]
+
+
+def get_notes_service(
+    session_factory: Annotated[
+        async_sessionmaker[AsyncSession], Depends(get_session_factory)
+    ],
+) -> NotesService:
+    """Como `TickerCatalogService` y el ABM de reglas de alerta, se construye por request: no
+    envuelve ningún cliente HTTP de larga vida (solo lee y escribe la base local) y nunca puede
+    fallar con 503 por credenciales.
+
+    Recibe el session factory y no la sesión del request porque maneja sus propias transacciones —
+    el borrado de una carpeta reparenta subcarpetas y notas, y eso tiene que ser una unidad.
+    """
+
+    return NotesService(session_factory)
+
+
+NotesServiceDep = Annotated[NotesService, Depends(get_notes_service)]

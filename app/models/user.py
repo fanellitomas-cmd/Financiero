@@ -15,6 +15,8 @@ from app.models.enums import PlanType
 
 if TYPE_CHECKING:
     from app.models.device_token import DeviceToken
+    from app.models.folder import Folder
+    from app.models.note import Note
     from app.models.watchlist import WatchlistItem
 
 
@@ -40,4 +42,14 @@ class User(Base):
     )
     device_tokens: Mapped[list[DeviceToken]] = relationship(
         "DeviceToken", back_populates="user", cascade="all, delete-orphan"
+    )
+
+    # El Investment Lab del usuario. Acá SÍ va `delete-orphan`: borrar la cuenta se lleva sus
+    # carpetas y notas, que no le sirven a nadie más. Es distinto del borrado de UNA carpeta, donde
+    # las notas se conservan (ver `app/models/folder.py`).
+    folders: Mapped[list[Folder]] = relationship(
+        "Folder", back_populates="user", cascade="all, delete-orphan"
+    )
+    notes: Mapped[list[Note]] = relationship(
+        "Note", back_populates="user", cascade="all, delete-orphan"
     )
