@@ -14,10 +14,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from types import TracebackType
-from typing import Any, Literal, Self
+from typing import Any, Self
 
 import httpx
 
@@ -111,7 +111,14 @@ def _parse_datetime(raw: Any) -> datetime | None:
             return datetime.strptime(raw, fmt).replace(tzinfo=timezone.utc)
         except ValueError:
             continue
-    return None
+    # ISO-8601 con `T` y zona: no es el formato que FMP usa hoy, pero un reporte sin fecha se
+    # muestra como "sin fecha" en la biblioteca del Corporate Hub, y eso es un dato perdido por un
+    # detalle de formato. `fromisoformat` acepta la `Z` desde 3.11.
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
 
 
 _MetricCandidate = tuple[dict[str, Any] | None, DataStatus, tuple[str, ...], str]
@@ -360,14 +367,40 @@ class FMPClient:
         )
 
     async def list_recent_filings(
-        self, ticker: str, filing_type: Literal["10-K", "10-Q"], *, limit: int = 4
+        self, ticker: str, filing_type: str | None = None, *, limit: int = 4
     ) -> list[FilingReference]:
+        """Filings del símbolo, sin distinguir "no hay" de "el proveedor falló".
+
+        Sirve para los llamadores que solo enriquecen un dossier con lo que haya: si el proveedor no
+        contesta, el dossier va sin filings y sigue. Quien tenga que MOSTRAR la diferencia (el
+        Corporate Hub la muestra) usa `list_recent_filings_with_status`.
+        """
+
+        filings, _ = await self.list_recent_filings_with_status(
+            ticker, filing_type, limit=limit
+        )
+        return filings
+
+    async def list_recent_filings_with_status(
+        self, ticker: str, filing_type: str | None = None, *, limit: int = 4
+    ) -> tuple[list[FilingReference], DataStatus]:
+        """Ídem, con el estado de la llamada. `filing_type=None` trae todos los tipos.
+
+        El parámetro pasó de `Literal["10-K","10-Q"]` a `str | None` cuando el Corporate Hub
+        necesitó los 8-K y la lista mezclada: restringirlo obligaba a una llamada por tipo para
+        armar una biblioteca que el proveedor devuelve de una.
+        """
+
         payload, status = await self._fetch_json(
             "/sec-filings-search/symbol",
-            {"symbol": ticker, "type": filing_type, "limit": limit},
+            {
+                "symbol": ticker,
+                **({"type": filing_type} if filing_type else {}),
+                "limit": limit,
+            },
         )
         if status != DataStatus.OK or not isinstance(payload, list):
-            return []
+            return [], status if status != DataStatus.OK else DataStatus.ERROR_API
 
         filings: list[FilingReference] = []
         for entry in payload:
@@ -376,7 +409,13 @@ class FMPClient:
             filings.append(
                 FilingReference(
                     ticker=ticker,
-                    filing_type=filing_type,
+                    # El tipo que informa el proveedor, no el que se pidió: al pedir "todos", cada
+                    # fila trae el suyo, y forzar el del parámetro etiquetaría un 8-K como 10-K.
+                    filing_type=_str_or_none(
+                        _first_present(entry, ("type", "formType"))
+                    )
+                    or filing_type
+                    or "OTHER",
                     filed_at=_parse_datetime(
                         _first_present(entry, ("filingDate", "fillingDate"))
                     ),
@@ -389,4 +428,38 @@ class FMPClient:
                     ),
                 )
             )
-        return filings
+        return filings, DataStatus.OK
+
+    async def get_earnings_calendar(
+        self, from_date: date, to_date: date
+    ) -> tuple[list[dict[str, Any]], DataStatus]:
+        """Balances programados y publicados en un rango.
+
+        Devuelve las filas CRUDAS del proveedor junto con el estado, en vez de un modelo de dominio:
+        la normalización (sesión, sorpresas, período) vive en `CorporateService`, que es quien tiene
+        las reglas del producto. Este cliente solo sabe hablar con FMP.
+
+        El `DataStatus` viaja aparte de la lista justamente para que el llamador pueda distinguir
+        "el rango no tiene balances" de "el proveedor falló" — dos listas vacías con significados
+        opuestos.
+        """
+
+        payload, status = await self._fetch_json(
+            "/earnings-calendar",
+            {"from": from_date.isoformat(), "to": to_date.isoformat()},
+        )
+        if status != DataStatus.OK or not isinstance(payload, list):
+            return [], status if status != DataStatus.OK else DataStatus.ERROR_API
+        return [entry for entry in payload if isinstance(entry, dict)], DataStatus.OK
+
+    async def get_earnings_history(
+        self, ticker: str, *, limit: int = 8
+    ) -> tuple[list[dict[str, Any]], DataStatus]:
+        """Trimestres reportados de un símbolo, crudos, para el histórico de sorpresas."""
+
+        payload, status = await self._fetch_json(
+            "/earnings", {"symbol": ticker, "limit": limit}
+        )
+        if status != DataStatus.OK or not isinstance(payload, list):
+            return [], status if status != DataStatus.OK else DataStatus.ERROR_API
+        return [entry for entry in payload if isinstance(entry, dict)], DataStatus.OK

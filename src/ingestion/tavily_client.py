@@ -153,9 +153,19 @@ class TavilyClient:
                     url=entry.get("url") if isinstance(entry.get("url"), str) else None,
                     published_at=_parse_published_at(entry.get("published_date")),
                     excerpt=content[:_MAX_EXCERPT_CHARS],
+                    # Tavily manda el titular aparte del cuerpo y antes se descartaba. El motor de
+                    # alertas no lo necesita, pero el feed del Corporate Hub sí: la alternativa es
+                    # usar la primera línea del `content`, que es una oración del medio de la nota.
+                    title=_clean_title(entry.get("title")),
                 )
             )
 
         return NewsSearchResult(
             query=query, fetched_at=fetched_at, status=DataStatus.OK, articles=articles
         )
+
+
+def _clean_title(raw: object) -> str | None:
+    if not isinstance(raw, str):
+        return None
+    return raw.strip() or None

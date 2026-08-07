@@ -15,6 +15,7 @@ from sqlalchemy.pool import StaticPool
 from app import models as _models  # noqa: F401  registra las tablas en Base.metadata
 from app.core.database import Base, get_db, get_session_factory
 from app.main import app
+from app.services.corporate_service import CorporateService
 from app.services.financial_translator_service import FinancialTranslatorService
 from app.services.portfolio_audit_service import PortfolioAuditService
 from app.services.ticker_intelligence_service import TickerIntelligenceService
@@ -77,6 +78,9 @@ async def client(
     app.state.financial_translator_service = FinancialTranslatorService(
         system_prompt="Prompt de prueba."
     )
+    # Corporate Hub sin ningún cliente: las cuatro vistas degradan con su motivo. Los tests que
+    # quieran datos la sobreescriben con los dobles que necesiten.
+    app.state.corporate_service = CorporateService(system_prompt="Prompt de prueba.")
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(

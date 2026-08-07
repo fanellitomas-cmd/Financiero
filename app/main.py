@@ -22,6 +22,7 @@ from app.core.config import app_settings
 from app.core.database import async_session_factory, create_all_tables, engine
 from app.services.agent_runner_service import AgentRunnerService
 from app.services.chat_service import ChatService
+from app.services.corporate_service import CorporateService
 from app.services.financial_translator_service import FinancialTranslatorService
 from app.services.market_data_service import MarketDataService
 from app.services.market_summary_service import MarketSummaryService
@@ -200,6 +201,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         gemini_client=gemini,
         cache_ttl_seconds=app_settings.financial_translator_cache_ttl_seconds,
         max_cache_entries=app_settings.financial_translator_max_cache_entries,
+    )
+
+    # El Corporate Hub también se instancia SIEMPRE, y por el mismo motivo que los dos anteriores:
+    # cada una de sus cuatro vistas degrada sola. Sin FMP no hay balances ni reportes, sin Tavily no
+    # hay noticias, sin Gemini los reportes se listan igual pero sin síntesis — y ninguna de esas
+    # ausencias vacía a las otras tres.
+    app.state.corporate_service = CorporateService(
+        fmp_client=fmp,
+        tavily_client=tavily,
+        gemini_client=gemini,
+        calendar_ttl_seconds=app_settings.corporate_calendar_cache_ttl_seconds,
+        history_ttl_seconds=app_settings.corporate_history_cache_ttl_seconds,
+        filings_ttl_seconds=app_settings.corporate_filings_cache_ttl_seconds,
+        news_ttl_seconds=app_settings.corporate_news_cache_ttl_seconds,
+        max_news_results=app_settings.corporate_max_news_results,
+        max_filings=app_settings.corporate_max_filings,
     )
     if gemini is None:
         logger.warning(

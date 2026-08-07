@@ -124,6 +124,12 @@ class EvidenceItem(BaseModel):
     published_at: datetime | None
     excerpt: str
 
+    # Titular de la pieza, cuando la fuente lo da. Opcional y con default para no romper a los
+    # constructores que ya existían: al motor de alertas no le hace falta (el RAG razona sobre el
+    # `excerpt`), pero un feed de noticias sin titulares tendría que usar la primera línea del
+    # cuerpo como encabezado, que es una frase suelta y no un título.
+    title: str | None = None
+
 
 class ResearchDossier(BaseModel):
     """Salida del Nodo 2. Contexto enriquecido, no expuesto directamente al usuario (Spec.md §3.2)."""

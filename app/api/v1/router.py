@@ -10,6 +10,7 @@ from app.api.v1 import (
     assets,
     auth,
     chat,
+    corporate,
     devices,
     folders,
     internal,
@@ -36,6 +37,7 @@ api_v1_router.include_router(alerts.router)
 api_v1_router.include_router(assets.router)
 api_v1_router.include_router(chat.router)
 api_v1_router.include_router(ai.router)
+api_v1_router.include_router(corporate.router)
 api_v1_router.include_router(market.router)
 api_v1_router.include_router(tickers.router)
 api_v1_router.include_router(folders.router)

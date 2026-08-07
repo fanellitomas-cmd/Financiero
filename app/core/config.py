@@ -76,6 +76,17 @@ class AppSettings(BaseSettings):
     financial_translator_cache_ttl_seconds: float = 86400.0
     financial_translator_max_cache_entries: int = 500
 
+    # Corporate Hub. Un TTL por vista y no uno global: un calendario de balances cambia de hora en
+    # hora (llegan los reportados del día), un histórico de trimestres cerrados no cambia en meses, y
+    # un feed de noticias envejece en minutos. Un TTL único obligaría a elegir entre gastar llamadas
+    # de más en lo estable o servir noticias viejas.
+    corporate_calendar_cache_ttl_seconds: float = 3600.0
+    corporate_history_cache_ttl_seconds: float = 21600.0
+    corporate_filings_cache_ttl_seconds: float = 3600.0
+    corporate_news_cache_ttl_seconds: float = 900.0
+    corporate_max_news_results: int = 20
+    corporate_max_filings: int = 20
+
     # Clientes web (el cliente Flutter corriendo en modo web, cualquier frontend futuro) llegan
     # desde otro origen (puerto distinto al de la API) — sin CORS habilitado, el navegador
     # bloquea el preflight OPTIONS antes de que la request real salga (405 Method Not Allowed,

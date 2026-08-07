@@ -16,6 +16,7 @@ from app.core.security import decode_access_token
 from app.models.user import User
 from app.services.agent_runner_service import AgentRunnerService
 from app.services.chat_service import ChatService
+from app.services.corporate_service import CorporateService
 from app.services.financial_translator_service import FinancialTranslatorService
 from app.services.market_data_service import MarketDataService
 from app.services.market_summary_service import MarketSummaryService
@@ -295,6 +296,27 @@ def get_notes_service(
 
 
 NotesServiceDep = Annotated[NotesService, Depends(get_notes_service)]
+
+
+def get_corporate_service(request: Request) -> CorporateService:
+    """El Corporate Hub se construye una vez en el lifespan, envolviendo los mismos clientes de
+    larga vida (y con ellos sus cachés, que se perderían si se reconstruyera por request).
+
+    Tampoco devuelve 503 sin credenciales: cada vista responde con su lista vacía, `availability` y
+    el motivo. Un 503 le impediría al cliente distinguir "no configurado" de "esta semana no reporta
+    nadie".
+    """
+
+    service = getattr(request.app.state, "corporate_service", None)
+    if not isinstance(service, CorporateService):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="El Hub Corporativo no está disponible en este momento.",
+        )
+    return service
+
+
+CorporateServiceDep = Annotated[CorporateService, Depends(get_corporate_service)]
 
 
 def get_attachments_service(
