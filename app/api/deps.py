@@ -19,6 +19,7 @@ from app.services.chat_service import ChatService
 from app.services.financial_translator_service import FinancialTranslatorService
 from app.services.market_data_service import MarketDataService
 from app.services.market_summary_service import MarketSummaryService
+from app.services.note_attachment_service import NoteAttachmentService
 from app.services.notes_service import NotesService
 from app.services.portfolio_audit_service import PortfolioAuditService
 from app.services.ticker_catalog_service import TickerCatalogService
@@ -294,3 +295,18 @@ def get_notes_service(
 
 
 NotesServiceDep = Annotated[NotesService, Depends(get_notes_service)]
+
+
+def get_attachments_service(
+    session_factory: Annotated[
+        async_sessionmaker[AsyncSession], Depends(get_session_factory)
+    ],
+) -> NoteAttachmentService:
+    """Ídem `NotesService`: por request, sin clientes externos y sin 503 posible."""
+
+    return NoteAttachmentService(session_factory)
+
+
+AttachmentsServiceDep = Annotated[
+    NoteAttachmentService, Depends(get_attachments_service)
+]

@@ -14,6 +14,7 @@ from app.api.v1 import (
     folders,
     internal,
     market,
+    note_attachments,
     notes,
     tickers,
     watchlist,
@@ -38,6 +39,10 @@ api_v1_router.include_router(ai.router)
 api_v1_router.include_router(market.router)
 api_v1_router.include_router(tickers.router)
 api_v1_router.include_router(folders.router)
+# Los adjuntos van ANTES del ABM de notas, por la misma razón que las rutas literales de
+# `/watchlist`: sus paths son más específicos (`/notes/{id}/attachments/...`) y registrarlos primero
+# los deja fuera del alcance de cualquier ruta comodín que se agregue después a `notes.router`.
+api_v1_router.include_router(note_attachments.router)
 api_v1_router.include_router(notes.router)
 api_v1_router.include_router(internal.router)
 api_v1_router.include_router(websocket.router)

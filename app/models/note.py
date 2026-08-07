@@ -19,6 +19,7 @@ from app.core.database import Base
 
 if TYPE_CHECKING:
     from app.models.folder import Folder
+    from app.models.note_attachment import NoteAttachment
     from app.models.user import User
 
 
@@ -66,3 +67,14 @@ class Note(Base):
 
     user: Mapped[User] = relationship("User", back_populates="notes")
     folder: Mapped[Folder | None] = relationship("Folder", back_populates="notes")
+
+    # Acá SÍ va `delete-orphan`, al revés que en `Folder.notes`: un adjunto no significa nada sin su
+    # nota y no hay a dónde reparentarlo. El cascade se declara a nivel ORM y no solo con el
+    # `ondelete` de la FK porque SQLite ignora las acciones referenciales salvo que se prenda
+    # `PRAGMA foreign_keys`, y el entorno de tests corre sobre SQLite.
+    attachments: Mapped[list[NoteAttachment]] = relationship(
+        "NoteAttachment",
+        back_populates="note",
+        cascade="all, delete-orphan",
+        order_by="NoteAttachment.created_at",
+    )

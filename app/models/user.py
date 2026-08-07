@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from app.models.device_token import DeviceToken
     from app.models.folder import Folder
     from app.models.note import Note
+    from app.models.note_attachment import NoteAttachment
     from app.models.watchlist import WatchlistItem
 
 
@@ -52,4 +53,10 @@ class User(Base):
     )
     notes: Mapped[list[Note]] = relationship(
         "Note", back_populates="user", cascade="all, delete-orphan"
+    )
+
+    # Los adjuntos cuelgan también del usuario, además de su nota: es la relación que hace que borrar
+    # la cuenta se lleve los blobs aunque las notas se borren por su propio cascade.
+    note_attachments: Mapped[list[NoteAttachment]] = relationship(
+        "NoteAttachment", back_populates="user", cascade="all, delete-orphan"
     )

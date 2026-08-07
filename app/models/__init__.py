@@ -6,6 +6,7 @@ from app.models.alert_history import AlertHistory
 from app.models.device_token import DeviceToken
 from app.models.folder import Folder
 from app.models.note import Note
+from app.models.note_attachment import NoteAttachment
 from app.models.ticker import Ticker
 from app.models.user import User
 from app.models.watchlist import WatchlistItem
@@ -16,6 +17,7 @@ __all__ = [
     "DeviceToken",
     "Folder",
     "Note",
+    "NoteAttachment",
     "Ticker",
     "User",
     "WatchlistAlertRule",
