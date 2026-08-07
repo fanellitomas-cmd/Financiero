@@ -6,6 +6,7 @@ import '../../../core/theme/app_theme.dart';
 import '../data/note.dart';
 import '../data/note_formatting.dart';
 import '../presentation/lab_controller.dart';
+import 'attachment_card.dart';
 import 'folder_dialogs.dart';
 import 'markdown_view.dart';
 import 'note_explorer.dart' show TickerBadge;
@@ -279,6 +280,12 @@ class _NoteEditorFormState extends ConsumerState<_NoteEditorForm> {
                     alignLabelWithHint: true,
                   ),
                 ),
+              // Las capturas van DEBAJO del cuerpo y solo cuando la nota ya existe: una nota que
+              // todavía no se guardó no tiene id contra el cual adjuntar nada.
+              if (widget.note != null) ...[
+                const SizedBox(height: 18),
+                NoteAttachmentsSection(noteId: widget.note!.id),
+              ],
               const SizedBox(height: 16),
               _EditorFooter(note: widget.note, draft: _draft),
             ],

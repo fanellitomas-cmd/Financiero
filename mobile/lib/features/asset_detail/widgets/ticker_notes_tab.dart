@@ -7,6 +7,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../lab/data/note.dart';
 import '../../lab/data/note_formatting.dart';
 import '../../lab/presentation/lab_controller.dart';
+import '../../lab/widgets/attachment_card.dart';
 import '../../lab/widgets/markdown_view.dart';
 import '../data/intelligence_note_snippet.dart';
 import '../presentation/deep_intelligence_controller.dart';
@@ -219,6 +220,10 @@ class _ExpandedNoteBody extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             MarkdownView(source: note.content, textScale: 0.95),
+            const SizedBox(height: 12),
+            // Los gráficos de la nota se ven acá mismo: una tesis técnica sin la captura que la
+            // motivó pierde la mitad del argumento.
+            NoteAttachmentsSection(noteId: note.id),
             const SizedBox(height: 10),
             Row(
               children: [

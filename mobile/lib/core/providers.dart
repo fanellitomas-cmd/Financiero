@@ -10,6 +10,7 @@ import '../features/auth/presentation/auth_controller.dart';
 import '../features/chat/data/chat_repository.dart';
 import '../features/dashboard/data/market_data_repository.dart';
 import '../features/dashboard/data/market_summary_repository.dart';
+import '../features/lab/data/attachments_repository.dart';
 import '../features/lab/data/folders_repository.dart';
 import '../features/lab/data/notes_repository.dart';
 import '../features/settings/data/exchange_type.dart';
@@ -148,4 +149,11 @@ final foldersRepositoryProvider = Provider<FoldersRepository>(
 
 final notesRepositoryProvider = Provider<NotesRepository>(
   (ref) => NotesRepository(ref.watch(apiClientProvider)),
+);
+
+/// Capturas de gráficos adjuntas a las notas. Repositorio propio y no un método más de
+/// `NotesRepository` porque lo que maneja es distinto: acá se transfieren imágenes, con su propio
+/// endpoint de bytes y su propia caché.
+final attachmentsRepositoryProvider = Provider<AttachmentsRepository>(
+  (ref) => AttachmentsRepository(ref.watch(apiClientProvider)),
 );
