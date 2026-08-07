@@ -5,11 +5,13 @@ import '../../../core/network/api_error.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../ai/widgets/financial_translation_card.dart';
 import '../data/deep_intelligence.dart';
+import '../data/intelligence_note_snippet.dart';
 import '../presentation/deep_intelligence_controller.dart';
 import 'fundamentals_section.dart';
 import 'intelligence_common.dart';
 import 'projections_section.dart';
 import 'rag_summary_section.dart';
+import 'ticker_notes_tab.dart' show NoteComposerDialog;
 
 /// Ficha de Inteligencia Profunda: fundamentales, síntesis de reportes y proyecciones por horizonte.
 ///
@@ -184,6 +186,7 @@ class _SheetHeader extends StatelessWidget {
             // que encenderlo acá lo deja encendido al saltar a otro activo: alguien que necesita
             // las explicaciones simples las necesita en todos los tickers.
             const BeginnerModeToggle(),
+            _SaveToLabAction(intelligence: intelligence),
             if (intelligence.servedFromCache)
               Tooltip(
                 // El backend cachea una hora. Decirlo evita que el usuario interprete un dato
@@ -223,6 +226,35 @@ class _SheetHeader extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// "Guardar esta Ficha en el Lab".
+///
+/// Vive en la cabecera de la Ficha, que es donde el usuario está cuando decide que lo que acaba de
+/// leer vale la pena conservar. La Ficha se regenera y cambia; una nota no — y este botón es el
+/// puente entre las dos.
+///
+/// Lo que se pega es una transcripción del contenido que la Ficha ya está mostrando, compuesta en
+/// código: no se le pide al modelo un resumen del resumen, que sería una oportunidad más de inventar
+/// un número.
+class _SaveToLabAction extends ConsumerWidget {
+  const _SaveToLabAction({required this.intelligence});
+
+  final DeepIntelligence intelligence;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return IconButton(
+      icon: const Icon(Icons.bookmark_add_outlined, size: 20),
+      tooltip: 'Guardar esta Ficha como nota en el Investment Lab',
+      onPressed: () => NoteComposerDialog.show(
+        context,
+        ref,
+        ticker: intelligence.ticker,
+        initialDraft: intelligenceNoteDraft(intelligence),
+      ),
     );
   }
 }

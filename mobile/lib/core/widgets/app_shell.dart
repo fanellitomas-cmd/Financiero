@@ -39,6 +39,15 @@ class AppShell extends ConsumerStatefulWidget {
       icon: Icons.visibility_outlined,
       selectedIcon: Icons.visibility,
     ),
+    // El Lab es un destino de primer nivel y no una sub-pantalla de la Watchlist: las notas no son
+    // de los activos que seguís sino tuyas, y varias no tienen ticker asociado. Enterrarlo dentro de
+    // la Watchlist volvería inalcanzables justamente esas.
+    _ShellDestination(
+      route: '/lab',
+      label: 'Lab',
+      icon: Icons.science_outlined,
+      selectedIcon: Icons.science,
+    ),
   ];
 
   @override

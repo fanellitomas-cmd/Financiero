@@ -10,6 +10,8 @@ import '../features/auth/presentation/auth_controller.dart';
 import '../features/chat/data/chat_repository.dart';
 import '../features/dashboard/data/market_data_repository.dart';
 import '../features/dashboard/data/market_summary_repository.dart';
+import '../features/lab/data/folders_repository.dart';
+import '../features/lab/data/notes_repository.dart';
 import '../features/settings/data/exchange_type.dart';
 import '../features/settings/presentation/exchange_controller.dart';
 import '../features/tickers/data/search_nl_repository.dart';
@@ -133,4 +135,17 @@ final searchNlRepositoryProvider = Provider<SearchNlRepository>(
 final financialTranslatorRepositoryProvider =
     Provider<FinancialTranslatorRepository>(
   (ref) => FinancialTranslatorRepository(ref.watch(apiClientProvider)),
+);
+
+/// Investment Lab: el árbol de carpetas y las notas de investigación.
+///
+/// Dos repositorios y no uno porque son dos recursos con ciclos de vida distintos: el árbol se lee
+/// una vez y cambia poco, las notas se filtran y reescriben todo el tiempo. Un repositorio único
+/// obligaría a invalidar los dos juntos en cada mutación.
+final foldersRepositoryProvider = Provider<FoldersRepository>(
+  (ref) => FoldersRepository(ref.watch(apiClientProvider)),
+);
+
+final notesRepositoryProvider = Provider<NotesRepository>(
+  (ref) => NotesRepository(ref.watch(apiClientProvider)),
 );
