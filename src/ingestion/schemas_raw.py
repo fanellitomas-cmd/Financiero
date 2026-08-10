@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -113,6 +114,36 @@ class FilingReference(BaseModel):
     accepted_at: datetime | None
     filing_url: str | None
     final_document_url: str | None
+
+
+class FinancialStatements(BaseModel):
+    """Los tres estados contables de un símbolo, TAL COMO los devuelve el proveedor.
+
+    Las filas quedan como `dict` sin tipar a propósito: cada endpoint de FMP trae decenas de líneas
+    con nombres que varían entre la API legacy y la `stable`, y declarar un modelo por estado
+    obligaría a elegir un subconjunto acá — donde no se sabe qué va a necesitar el consumidor — y a
+    tirar el resto. La interpretación (qué línea es "ingresos", qué umbral es una bandera roja) es
+    decisión de la capa de aplicación (.cursorrules §3).
+
+    Cada lista puede venir vacía por separado: un balance general disponible sin flujo de caja
+    permite igual la mitad del análisis, y esa asimetría es información que el servicio declara.
+    """
+
+    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
+
+    ticker: str
+
+    # `annual` o `quarter`, tal como se le pidió al proveedor. Viaja con los datos porque un margen
+    # trimestral y uno anual no se comparan entre sí.
+    period: str
+
+    income: list[dict[str, Any]]
+    balance: list[dict[str, Any]]
+    cash_flow: list[dict[str, Any]]
+
+    @property
+    def is_empty(self) -> bool:
+        return not (self.income or self.balance or self.cash_flow)
 
 
 class CompanyProfile(BaseModel):

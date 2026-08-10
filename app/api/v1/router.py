@@ -6,6 +6,7 @@ from fastapi import APIRouter
 
 from app.api.v1 import (
     ai,
+    ai_lab,
     alerts,
     assets,
     auth,
@@ -37,6 +38,7 @@ api_v1_router.include_router(alerts.router)
 api_v1_router.include_router(assets.router)
 api_v1_router.include_router(chat.router)
 api_v1_router.include_router(ai.router)
+api_v1_router.include_router(ai_lab.router)
 api_v1_router.include_router(corporate.router)
 api_v1_router.include_router(market.router)
 api_v1_router.include_router(tickers.router)

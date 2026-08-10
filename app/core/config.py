@@ -87,6 +87,17 @@ class AppSettings(BaseSettings):
     corporate_max_news_results: int = 20
     corporate_max_filings: int = 20
 
+    # Laboratorio Financiero. Los estados contables tienen el TTL más largo de toda la app (6 h) por
+    # una razón simple: un balance publicado no cambia hasta el próximo reporte, así que volver a
+    # pedirlo gasta cuota sin poder traer nada nuevo. La capitalización sí se mueve con el precio
+    # durante la rueda, y por eso tiene su propio TTL corto.
+    ai_lab_statements_cache_ttl_seconds: float = 21600.0
+    ai_lab_metrics_cache_ttl_seconds: float = 3600.0
+
+    # Cuántos períodos contables se piden. Cinco alcanzan para ver una tendencia; más filas engordan
+    # el prompt sin cambiar el diagnóstico.
+    ai_lab_statement_periods: int = 5
+
     # Clientes web (el cliente Flutter corriendo en modo web, cualquier frontend futuro) llegan
     # desde otro origen (puerto distinto al de la API) — sin CORS habilitado, el navegador
     # bloquea el preflight OPTIONS antes de que la request real salga (405 Method Not Allowed,

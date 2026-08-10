@@ -17,7 +17,7 @@ import logging
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from types import TracebackType
-from typing import Any, Self
+from typing import Any, Literal, Self
 
 import httpx
 
@@ -28,7 +28,11 @@ from src.core.exceptions import (
     ProviderTimeoutError,
 )
 from src.core.http_utils import request_with_retries
-from src.ingestion.schemas_raw import CompanyProfile, FilingReference
+from src.ingestion.schemas_raw import (
+    CompanyProfile,
+    FilingReference,
+    FinancialStatements,
+)
 from src.validation.domain_models import DataStatus, FinancialMetrics, MetricValue
 
 logger = logging.getLogger(__name__)
@@ -73,6 +77,17 @@ def _first_present(payload: dict[str, Any], keys: tuple[str, ...]) -> Any:
         if key in payload and payload[key] is not None:
             return payload[key]
     return None
+
+
+def _statement_rows(payload: Any) -> list[dict[str, Any]]:
+    """Las filas de un estado contable. Lo que no sea una lista de objetos vuelve vacío: un payload
+    con otra forma es un endpoint que no respondió lo esperado, y propagarlo obligaría a cada
+    consumidor a revalidar el tipo.
+    """
+
+    if not isinstance(payload, list):
+        return []
+    return [row for row in payload if isinstance(row, dict)]
 
 
 def _first_object(payload: Any) -> dict[str, Any] | None:
@@ -463,3 +478,52 @@ class FMPClient:
         if status != DataStatus.OK or not isinstance(payload, list):
             return [], status if status != DataStatus.OK else DataStatus.ERROR_API
         return [entry for entry in payload if isinstance(entry, dict)], DataStatus.OK
+
+    async def get_financial_statements(
+        self,
+        ticker: str,
+        *,
+        period: Literal["annual", "quarter"] = "annual",
+        limit: int = 5,
+    ) -> tuple[FinancialStatements, DataStatus]:
+        """Los tres estados contables del símbolo, crudos y en paralelo.
+
+        Devuelve las filas TAL COMO las manda el proveedor: los cálculos (márgenes, DuPont, flags)
+        viven en `AiLabService`, que es quien tiene los umbrales del producto. Este cliente solo sabe
+        hablar con FMP.
+
+        El estado agregado es **OK si al menos uno de los tres estados llegó**: un balance general
+        disponible sin flujo de caja sigue permitiendo la mitad del análisis, y devolver ERROR_API
+        entero por eso escondería datos que sí están. Cada lista vacía se declara igual del lado del
+        servicio.
+        """
+
+        params = {"symbol": ticker, "period": period, "limit": limit}
+        (
+            (income_payload, income_status),
+            (balance_payload, balance_status),
+            (cash_payload, cash_status),
+        ) = await asyncio.gather(
+            self._fetch_json("/income-statement", params),
+            self._fetch_json("/balance-sheet-statement", params),
+            self._fetch_json("/cash-flow-statement", params),
+        )
+
+        statements = FinancialStatements(
+            ticker=ticker,
+            period=period,
+            income=_statement_rows(income_payload),
+            balance=_statement_rows(balance_payload),
+            cash_flow=_statement_rows(cash_payload),
+        )
+
+        any_ok = any(
+            status == DataStatus.OK
+            for status in (income_status, balance_status, cash_status)
+        )
+        if not any_ok:
+            # Se elige el estado del estado de resultados como representativo: es el que decide si el
+            # análisis puede existir, y devolver tres estados distintos obligaría al llamador a
+            # reimplementar esta misma decisión.
+            return statements, income_status
+        return statements, DataStatus.OK

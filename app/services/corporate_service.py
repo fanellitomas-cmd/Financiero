@@ -24,16 +24,15 @@ Las cuatro degradaciones, todas con la misma forma (respuesta válida + `availab
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 import logging
 import math
-import time
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import urlparse
 
+from app.core.ttl_cache import TtlCache
 from app.schemas.corporate import (
     MIN_ABS_ESTIMATE_FOR_PCT,
     MIN_ABS_REVENUE_FOR_PCT,
@@ -83,8 +82,6 @@ _IN_LINE_EPS_TOLERANCE = 0.005
 
 # Cuántos días de noticias mira el feed por defecto.
 _NEWS_WINDOW_DAYS = 14
-
-_MAX_CACHE_ENTRIES = 128
 
 
 # --- Clasificación de noticias --------------------------------------------------------------------
@@ -558,68 +555,6 @@ def extract_source(url: str | None) -> str | None:
     return host.removeprefix("www.")
 
 
-# --- Caché ------------------------------------------------------------------------------------------
-
-
-class _TtlCache:
-    """Caché por TTL con desalojo por orden de inserción.
-
-    `time.monotonic` y no `datetime.now`: mide tiempo transcurrido, y un ajuste del reloj del sistema
-    no debería invalidarla ni eternizarla.
-
-    El `Lock` NO es para proteger el `dict` (el GIL alcanza), sino para que dos requests simultáneos
-    por la misma clave no disparen dos veces la llamada al proveedor. Con un feed de noticias abierto
-    en dos pestañas eso es el caso normal, no el raro.
-    """
-
-    def __init__(
-        self, *, ttl_seconds: float, max_entries: int = _MAX_CACHE_ENTRIES
-    ) -> None:
-        self._ttl = ttl_seconds
-        self._max_entries = max_entries
-        self._entries: dict[str, tuple[float, Any]] = {}
-        self._locks: dict[str, asyncio.Lock] = {}
-
-    def get(self, key: str) -> Any | None:
-        entry = self._entries.get(key)
-        if entry is None:
-            return None
-        stored_at, value = entry
-        if time.monotonic() - stored_at > self._ttl:
-            del self._entries[key]
-            return None
-        return value
-
-    def set(self, key: str, value: Any) -> None:
-        if len(self._entries) >= self._max_entries:
-            oldest = next(iter(self._entries))
-            del self._entries[oldest]
-        self._entries[key] = (time.monotonic(), value)
-
-    def lock_for(self, key: str) -> asyncio.Lock:
-        lock = self._locks.get(key)
-        if lock is None:
-            lock = asyncio.Lock()
-            self._locks[key] = lock
-            # Los locks se podan junto con las entradas para que la tabla no crezca sin límite con
-            # claves que nunca se repiten (un ticker distinto por consulta). Un lock TOMADO no se
-            # poda aunque su clave no esté cacheada: es el de un request en vuelo, y sacarlo del
-            # diccionario dejaría que el siguiente cree otro y llame al proveedor en paralelo, que
-            # es exactamente lo que el lock existe para evitar.
-            if len(self._locks) > self._max_entries * 2:
-                for stale, stale_lock in list(self._locks.items()):
-                    if (
-                        stale != key
-                        and stale not in self._entries
-                        and not stale_lock.locked()
-                    ):
-                        del self._locks[stale]
-        return lock
-
-    def clear(self) -> None:
-        self._entries.clear()
-
-
 # --- Servicio ----------------------------------------------------------------------------------------
 
 
@@ -653,10 +588,10 @@ class CorporateService:
         # Un TTL por vista, no uno global: un calendario de balances cambia de hora en hora y un
         # histórico de trimestres cerrados no cambia en meses. Un TTL único obligaría a elegir entre
         # gastar llamadas de más o servir datos viejos.
-        self._calendar_cache = _TtlCache(ttl_seconds=calendar_ttl_seconds)
-        self._history_cache = _TtlCache(ttl_seconds=history_ttl_seconds)
-        self._filings_cache = _TtlCache(ttl_seconds=filings_ttl_seconds)
-        self._news_cache = _TtlCache(ttl_seconds=news_ttl_seconds)
+        self._calendar_cache = TtlCache(ttl_seconds=calendar_ttl_seconds)
+        self._history_cache = TtlCache(ttl_seconds=history_ttl_seconds)
+        self._filings_cache = TtlCache(ttl_seconds=filings_ttl_seconds)
+        self._news_cache = TtlCache(ttl_seconds=news_ttl_seconds)
 
     # --- Calendario de balances -------------------------------------------------------------
 

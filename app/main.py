@@ -10,17 +10,23 @@ Correr en desarrollo:
 from __future__ import annotations
 
 import logging
+import math
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app import models as _models  # noqa: F401  registra las tablas en Base.metadata
 from app.api.v1.router import api_v1_router
 from app.core.config import app_settings
 from app.core.database import async_session_factory, create_all_tables, engine
 from app.services.agent_runner_service import AgentRunnerService
+from app.services.ai_lab_service import AiLabService
 from app.services.chat_service import ChatService
 from app.services.corporate_service import CorporateService
 from app.services.financial_translator_service import FinancialTranslatorService
@@ -218,6 +224,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         max_news_results=app_settings.corporate_max_news_results,
         max_filings=app_settings.corporate_max_filings,
     )
+
+    # El Laboratorio Financiero se instancia SIEMPRE, y acá la asimetría entre sus dos dependencias
+    # es la que justifica hacerlo: sin FMP no hay estados contables y no hay nada que analizar, pero
+    # sin Gemini el análisis conserva TODOS sus números —márgenes, DuPont, banderas— y lo único que
+    # falta es la prosa. Exigir las dos credenciales dejaría inalcanzable un módulo que funciona.
+    app.state.ai_lab_service = AiLabService(
+        fmp_client=fmp,
+        gemini_client=gemini,
+        statements_ttl_seconds=app_settings.ai_lab_statements_cache_ttl_seconds,
+        metrics_ttl_seconds=app_settings.ai_lab_metrics_cache_ttl_seconds,
+        statement_periods=app_settings.ai_lab_statement_periods,
+    )
     if gemini is None:
         logger.warning(
             "conversational_features_not_configured",
@@ -308,6 +326,40 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await engine.dispose()
 
 
+def _finite_json(value: Any) -> Any:
+    """Reemplaza los flotantes no finitos por su representación en texto, recursivamente.
+
+    Existe por un modo de falla concreto del camino de ERROR: el parser JSON de Python acepta los
+    literales `NaN` e `Infinity` (el estándar JSON no) y `1e400` desborda a infinito. Cuando un schema
+    los rechaza —lo que es correcto—, FastAPI arma un 422 cuyo detalle incluye el valor recibido, y
+    serializar ese `nan` explota con un 500. El request inválido terminaba respondiendo "error del
+    servidor" en vez de "tu número no es válido".
+    """
+
+    if isinstance(value, float) and not math.isfinite(value):
+        return repr(value)
+    if isinstance(value, dict):
+        return {key: _finite_json(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_finite_json(item) for item in value]
+    return value
+
+
+async def _validation_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Mismo 422 que el handler por defecto de FastAPI, pero con el detalle saneado.
+
+    Se registra para toda la app y no solo para el Laboratorio Financiero: cualquier endpoint con un
+    campo `float` tiene el mismo agujero, y arreglarlo en un solo lugar evita que el próximo lo
+    reintroduzca.
+    """
+
+    errors = exc.errors() if isinstance(exc, RequestValidationError) else []
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={"detail": _finite_json(jsonable_encoder(errors))},
+    )
+
+
 def create_app() -> FastAPI:
     application = FastAPI(
         title="Financiero API",
@@ -321,6 +373,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    application.add_exception_handler(RequestValidationError, _validation_error_handler)
     application.include_router(api_v1_router)
     return application
 

@@ -15,6 +15,7 @@ from app.core.database import get_db, get_session_factory
 from app.core.security import decode_access_token
 from app.models.user import User
 from app.services.agent_runner_service import AgentRunnerService
+from app.services.ai_lab_service import AiLabService
 from app.services.chat_service import ChatService
 from app.services.corporate_service import CorporateService
 from app.services.financial_translator_service import FinancialTranslatorService
@@ -317,6 +318,28 @@ def get_corporate_service(request: Request) -> CorporateService:
 
 
 CorporateServiceDep = Annotated[CorporateService, Depends(get_corporate_service)]
+
+
+def get_ai_lab_service(request: Request) -> AiLabService:
+    """El Laboratorio Financiero también se construye una vez en el lifespan: sus dos cachés (estados
+    contables y capitalización) se perderían si el servicio se reconstruyera por request, y el punto
+    de cachear estados contables es justamente que no cambian entre reportes.
+
+    No devuelve 503 sin credenciales: cada vista responde con su estructura vacía, `availability` y el
+    motivo. Sin Gemini, además, el análisis conserva todos sus números — lo único que falta es la
+    prosa, y eso viaja en un campo aparte.
+    """
+
+    service = getattr(request.app.state, "ai_lab_service", None)
+    if not isinstance(service, AiLabService):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="El Laboratorio Financiero no está disponible en este momento.",
+        )
+    return service
+
+
+AiLabServiceDep = Annotated[AiLabService, Depends(get_ai_lab_service)]
 
 
 def get_attachments_service(
