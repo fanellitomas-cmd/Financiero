@@ -47,7 +47,7 @@ class ProjectionsSection extends ConsumerWidget {
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: IntelligenceUnavailableBanner(
+              child: DegradationBanner(
                 reason: projections.degradationReason,
                 icon: Icons.timeline_outlined,
               ),

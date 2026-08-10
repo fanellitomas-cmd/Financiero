@@ -8,6 +8,7 @@ import '../features/asset_detail/data/history_repository.dart';
 import '../features/auth/data/auth_repository.dart';
 import '../features/auth/presentation/auth_controller.dart';
 import '../features/chat/data/chat_repository.dart';
+import '../features/corporate/data/corporate_repository.dart';
 import '../features/dashboard/data/market_data_repository.dart';
 import '../features/dashboard/data/market_summary_repository.dart';
 import '../features/lab/data/attachments_repository.dart';
@@ -149,6 +150,14 @@ final foldersRepositoryProvider = Provider<FoldersRepository>(
 
 final notesRepositoryProvider = Provider<NotesRepository>(
   (ref) => NotesRepository(ref.watch(apiClientProvider)),
+);
+
+/// Hub Corporativo: calendario de balances, histórico de sorpresas, reportes SEC y noticias.
+///
+/// Un repositorio para las cuatro vistas porque comparten el prefijo y el contrato de degradación —
+/// la separación que sí importa es la del backend, que les da una caché con TTL propio a cada una.
+final corporateRepositoryProvider = Provider<CorporateRepository>(
+  (ref) => CorporateRepository(ref.watch(apiClientProvider)),
 );
 
 /// Capturas de gráficos adjuntas a las notas. Repositorio propio y no un método más de

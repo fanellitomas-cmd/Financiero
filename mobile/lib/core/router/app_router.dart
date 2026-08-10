@@ -6,6 +6,7 @@ import '../../features/alerts/presentation/alerts_screen.dart';
 import '../../features/asset_detail/presentation/asset_detail_screen.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/chat/presentation/chat_screen.dart';
+import '../../features/corporate/presentation/corporate_hub_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/lab/presentation/investment_lab_screen.dart';
 import '../../features/watchlist/data/watchlist_models.dart';
@@ -54,6 +55,9 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
               path: '/watchlist',
               builder: (context, state) => const WatchlistScreen()),
+          GoRoute(
+              path: '/corporate',
+              builder: (context, state) => const CorporateHubScreen()),
           GoRoute(
               path: '/lab',
               builder: (context, state) => const InvestmentLabScreen()),

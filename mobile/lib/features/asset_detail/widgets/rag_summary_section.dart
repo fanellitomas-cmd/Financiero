@@ -55,7 +55,7 @@ class _RagSummarySectionState extends ConsumerState<RagSummarySection> {
             ),
             if (isUnavailable) ...[
               const SizedBox(height: 12),
-              IntelligenceUnavailableBanner(
+              DegradationBanner(
                 reason: summary.degradationReason,
                 icon: Icons.menu_book_outlined,
               ),

@@ -47,7 +47,7 @@ class FundamentalsSection extends ConsumerWidget {
             ),
             if (isUnavailable) ...[
               const SizedBox(height: 12),
-              IntelligenceUnavailableBanner(
+              DegradationBanner(
                 reason: fundamentals.degradationReason,
                 icon: Icons.query_stats,
               ),
@@ -78,7 +78,7 @@ class FundamentalsSection extends ConsumerWidget {
               if (fundamentals.availability == DataAvailability.partial &&
                   fundamentals.degradationReason != null) ...[
                 const SizedBox(height: 4),
-                IntelligenceUnavailableBanner(
+                DegradationBanner(
                   reason: fundamentals.degradationReason,
                 ),
               ],

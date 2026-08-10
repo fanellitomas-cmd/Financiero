@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_error.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../corporate/widgets/ticker_corporate_tab.dart';
 import '../../watchlist/data/watchlist_models.dart';
 import '../data/push_notification_payload.dart';
 import '../widgets/deep_intelligence_sheet.dart';
@@ -33,14 +34,16 @@ class AssetDetailScreen extends StatelessWidget {
 /// Detalle de un activo, sin cromo propio (ni Scaffold ni AppBar) para poder usarse tanto como
 /// pantalla completa (mobile) como panel lateral (escritorio).
 ///
-/// Tres pestañas, con fuentes de datos INDEPENDIENTES:
+/// Cuatro pestañas, con fuentes de datos INDEPENDIENTES:
 ///
 ///   - **Resumen** — la alerta del agente (`GET /api/v1/assets/{ticker}` on-demand más el
 ///     WebSocket en vivo) y el chart de velas (`GET /api/v1/market/history/{ticker}`).
 ///   - **Inteligencia Profunda** — fundamentales, síntesis de reportes y proyecciones por horizonte
 ///     (`GET /api/v1/tickers/{ticker}/intelligence`).
+///   - **Corporativo** — el próximo balance y las noticias del símbolo
+///     (`GET /api/v1/corporate/...`). Es el acceso rápido al Hub, no el Hub embebido.
 ///   - **Notas** — las notas del Investment Lab vinculadas a este símbolo
-///     (`GET /api/v1/notes?ticker=`). Es lo único de las tres que el usuario escribió, y por eso es
+///     (`GET /api/v1/notes?ticker=`). Es lo único de las cuatro que el usuario escribió, y por eso es
 ///     lo único que no se puede regenerar.
 ///
 /// Las pestañas están ARRIBA del gate del payload de alertas a propósito. El cuerpo de "Resumen"
@@ -66,7 +69,7 @@ class _AssetDetailViewState extends ConsumerState<AssetDetailView>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
   }
 
   @override
@@ -81,7 +84,7 @@ class _AssetDetailViewState extends ConsumerState<AssetDetailView>
       children: [
         TabBar(
           controller: _tabController,
-          // `isScrollable` con tres pestañas: en el panel angosto del master-detail, tres etiquetas
+          // `isScrollable` con cuatro pestañas: en el panel angosto del master-detail, etiquetas
           // de ancho fijo cortan "Inteligencia Profunda" a la mitad.
           isScrollable: true,
           tabAlignment: TabAlignment.start,
@@ -90,6 +93,10 @@ class _AssetDetailViewState extends ConsumerState<AssetDetailView>
             Tab(
               text: 'Inteligencia Profunda',
               icon: Icon(Icons.travel_explore_outlined, size: 18),
+            ),
+            Tab(
+              text: 'Corporativo',
+              icon: Icon(Icons.business_center_outlined, size: 18),
             ),
             Tab(text: 'Notas', icon: Icon(Icons.edit_note_outlined, size: 18)),
           ],
@@ -106,6 +113,7 @@ class _AssetDetailViewState extends ConsumerState<AssetDetailView>
                     setState(() => _showBeginnerOverride = value),
               ),
               DeepIntelligenceSheet(ticker: widget.ticker),
+              TickerCorporateTab(ticker: widget.ticker),
               TickerNotesTab(ticker: widget.ticker),
             ],
           ),

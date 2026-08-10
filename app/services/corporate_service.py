@@ -706,6 +706,11 @@ class CorporateService:
                         event
                         for event in (build_earnings_event(row) for row in rows)
                         if event is not None
+                        # Se descarta lo que cae AFUERA del rango pedido, aunque el proveedor lo haya
+                        # mandado. La respuesta declara `from_date`/`to_date`, y una fila del 27/08
+                        # debajo de un encabezado que dice "10/08 — 17/08" hace que la pantalla se
+                        # contradiga: el rango de la respuesta es la afirmación, no una sugerencia.
+                        and from_date <= event.event_date <= to_date
                     ]
                     self._calendar_cache.set(key, cached)
 

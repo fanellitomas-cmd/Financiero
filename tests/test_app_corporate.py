@@ -569,6 +569,49 @@ class TestEarningsCalendarService:
         assert result.availability is DataAvailability.UNAVAILABLE
         assert result.degradation_reason == REASON_NO_FMP
 
+    async def test_lo_que_cae_afuera_del_rango_no_entra(self) -> None:
+        """El rango de la respuesta es una AFIRMACIÓN, no una sugerencia.
+
+        Un proveedor que devuelve una fila del 27/08 para un pedido de "10/08 al 17/08" haría que el
+        cliente muestre ese balance debajo de un encabezado que dice otra cosa, y la pantalla se
+        contradiría sola.
+        """
+
+        service = _service(
+            fmp_client=_FakeFMP(
+                calendar_rows=[
+                    {"symbol": "AAPL", "date": "2026-08-11"},
+                    {"symbol": "NVDA", "date": "2026-08-27"},
+                    {"symbol": "KO", "date": "2026-08-01"},
+                ]
+            )
+        )
+
+        result = await service.get_earnings_calendar(
+            from_date=date(2026, 8, 10), to_date=date(2026, 8, 17)
+        )
+
+        assert [event.ticker for event in result.events] == ["AAPL"]
+        # Los descartados por fecha NO se cuentan como excluidos por sector: ese contador explica un
+        # filtro que el usuario puso, y esto es una corrección del rango que el usuario ya pidió.
+        assert result.unclassified_by_sector == 0
+
+    async def test_los_extremos_del_rango_son_inclusivos(self) -> None:
+        service = _service(
+            fmp_client=_FakeFMP(
+                calendar_rows=[
+                    {"symbol": "AAPL", "date": "2026-08-10"},
+                    {"symbol": "NVDA", "date": "2026-08-17"},
+                ]
+            )
+        )
+
+        result = await service.get_earnings_calendar(
+            from_date=date(2026, 8, 10), to_date=date(2026, 8, 17)
+        )
+
+        assert [event.ticker for event in result.events] == ["AAPL", "NVDA"]
+
     async def test_un_fallo_del_proveedor_se_distingue_de_no_tener_datos(self) -> None:
         """Las dos respuestas tienen `events: []`. Lo único que las distingue es `availability` y el
         motivo — sin eso, "esta semana no reporta nadie" se lee como una falla.
@@ -1524,7 +1567,15 @@ class TestEarningsCalendarEndpoint:
 
         response = await client.get(
             "/api/v1/corporate/earnings-calendar",
-            params={"ticker": "JPM", "sector": "tecnologia"},
+            # El rango va explícito: sin él se usa el default (hoy + 7 días), y las fechas del
+            # fixture quedarían afuera del rango — la respuesta descarta lo que no pertenece al
+            # rango que declara.
+            params={
+                "from": "2026-08-20",
+                "to": "2026-08-31",
+                "ticker": "JPM",
+                "sector": "tecnologia",
+            },
             headers=headers,
         )
 

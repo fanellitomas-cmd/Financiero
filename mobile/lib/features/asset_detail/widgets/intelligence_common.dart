@@ -4,50 +4,11 @@ import '../../../core/theme/app_theme.dart';
 import '../data/deep_intelligence.dart';
 
 /// Piezas compartidas por las tres secciones de la Ficha de Inteligencia Profunda.
-
-/// Banner informativo de un bloque no disponible.
 ///
-/// La regla de la Ficha: **nunca esconder una sección ni dejarla en blanco**. Una tarjeta ausente
-/// se lee como un bug; una tarjeta vacía se lee como "no hay nada que decir sobre esto", que es una
-/// afirmación falsa. El banner dice qué falta y por qué, con el motivo que manda el backend.
-///
-/// Ámbar y no rojo a propósito: que falte una credencial no es la app rota, y pintarlo de rojo
-/// haría que un entorno sin configurar pareciera roto.
-class IntelligenceUnavailableBanner extends StatelessWidget {
-  const IntelligenceUnavailableBanner({
-    super.key,
-    required this.reason,
-    this.icon = Icons.info_outline,
-  });
-
-  final String? reason;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppTheme.neutral.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppTheme.neutral.withValues(alpha: 0.35)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 16, color: AppTheme.neutral),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              reason ?? 'Este bloque no está disponible en este momento.',
-              style: const TextStyle(color: AppTheme.textMuted, fontSize: 12),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+/// El aviso de bloque degradado vive en `core/widgets/degradation_banner.dart`: lo comparten la
+/// Ficha, la Auditoría y el Hub Corporativo, que degradan con el mismo contrato. Se re-exporta acá
+/// para que las secciones de la Ficha no necesiten dos imports para armar una tarjeta.
+export '../../../core/widgets/degradation_banner.dart' show DegradationBanner;
 
 /// Encabezado de sección con su chip de estado. El chip existe para que el usuario sepa de un
 /// vistazo si lo que está leyendo está completo, sin tener que inferirlo del contenido.

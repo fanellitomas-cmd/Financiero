@@ -219,7 +219,7 @@ class _SheetHeader extends StatelessWidget {
         // encontrarse el hueco.
         if (!intelligence.isFullyAvailable) ...[
           const SizedBox(height: 12),
-          const IntelligenceUnavailableBanner(
+          const DegradationBanner(
             reason:
                 'Esta Ficha está incompleta: algún bloque no pudo generarse. Cada sección '
                 'indica abajo qué le falta y por qué.',
