@@ -486,9 +486,7 @@ async def _seed_watcher(
         await session.flush()
 
         for rule in rules or []:
-            session.add(
-                WatchlistAlertRule(watchlist_item_id=item.id, **rule)  # type: ignore[arg-type]
-            )
+            session.add(WatchlistAlertRule(watchlist_item_id=item.id, **rule))
         if fcm_token is not None:
             session.add(
                 DeviceToken(

@@ -776,6 +776,7 @@ class TestProjection:
             period=StatementPeriod.ANNUAL,
         )
 
+        assert baseline.eps is not None
         assert baseline.eps == pytest.approx(1.67)
         assert baseline.model_eps is not None
         assert baseline.model_eps < baseline.eps
@@ -1310,13 +1311,45 @@ class TestAnalyzeService:
         # El historial previo se reinyecta en el prompt: es lo que mantiene el hilo.
         assert "<conversacion_previa>" in gemini.prompts[0]
 
-    async def test_sin_pregunta_no_se_agrega_un_turno_de_usuario(self) -> None:
+    async def test_sin_pregunta_el_hilo_queda_vacio(self) -> None:
+        """La lectura general se devuelve en `narrative`, no como un turno del hilo.
+
+        Como turno se mostraba dos veces en la pantalla —informe y burbuja del analista— y volvía en
+        el próximo request como una respuesta que nadie preguntó.
+        """
+
         service = _service(
             fmp_client=_FakeFMP(statements=_statements()), gemini_client=_FakeGemini()
         )
         result = await service.analyze(FinancialAnalysisRequest(ticker="NVDA"))
 
-        assert [turn.role for turn in result.history] == [ConversationRole.ASSISTANT]
+        assert result.narrative == "Lectura del analista."
+        assert result.history == []
+
+    async def test_una_pregunta_no_borra_el_hilo_que_ya_venia(self) -> None:
+        """El hilo previo sobrevive a un diagnóstico sin pregunta: recargar el activo no debería
+        perder la conversación.
+        """
+
+        service = _service(
+            fmp_client=_FakeFMP(statements=_statements()), gemini_client=_FakeGemini()
+        )
+        result = await service.analyze(
+            FinancialAnalysisRequest(
+                ticker="NVDA",
+                history=[
+                    ConversationTurn(role=ConversationRole.USER, content="¿Y la caja?"),
+                    ConversationTurn(
+                        role=ConversationRole.ASSISTANT, content="Convierte casi todo."
+                    ),
+                ],
+            )
+        )
+
+        assert [turn.content for turn in result.history] == [
+            "¿Y la caja?",
+            "Convierte casi todo.",
+        ]
 
     async def test_los_estados_se_cachean_por_ticker_y_periodicidad(self) -> None:
         fmp = _FakeFMP(statements=_statements())
@@ -1580,6 +1613,92 @@ class TestEndpoints:
         assert body["valuation_basis"] == "PE_MULTIPLE_HELD"
         assert body["custom_event_is_qualitative"] is True
         assert body["model_assumptions"]
+
+    async def test_el_periodo_viaja_como_string_igual_que_desde_el_cliente(
+        self, client: httpx.AsyncClient
+    ) -> None:
+        """JSON no tiene tipo nativo para Enum: el período llega como `"QUARTER"`, no como
+        `StatementPeriod`.
+
+        Es el cuerpo exacto que manda la app, y con los schemas de request en modo estricto los dos
+        endpoints lo rechazaban con 422 — la pantalla mostraba "error de red" sin haber pedido nada
+        raro.
+        """
+
+        app.state.ai_lab_service = _service(
+            fmp_client=_FakeFMP(statements=_statements())
+        )
+        headers = await _auth(client, "ailab-period@example.com")
+
+        analysis = await client.post(
+            "/api/v1/ai-lab/financial-analysis",
+            json={"ticker": "NVDA", "period": "QUARTER"},
+            headers=headers,
+        )
+        simulate = await client.post(
+            "/api/v1/ai-lab/simulate",
+            json={"ticker": "NVDA", "period": "QUARTER", "variables": {}},
+            headers=headers,
+        )
+
+        assert analysis.status_code == 200
+        assert analysis.json()["period"] == "QUARTER"
+        assert simulate.status_code == 200
+        assert simulate.json()["baseline"] is not None
+
+    async def test_un_rol_del_historial_viaja_como_string(
+        self, client: httpx.AsyncClient
+    ) -> None:
+        """Mismo caso que el período, con el hilo que el cliente devuelve turno a turno."""
+
+        app.state.ai_lab_service = _service(
+            fmp_client=_FakeFMP(statements=_statements()), gemini_client=_FakeGemini()
+        )
+        headers = await _auth(client, "ailab-role@example.com")
+
+        response = await client.post(
+            "/api/v1/ai-lab/financial-analysis",
+            json={
+                "ticker": "NVDA",
+                "question": "¿Y la caja?",
+                "history": [
+                    {"role": "USER", "content": "¿De dónde viene el ROE?"},
+                    {"role": "ASSISTANT", "content": "Del margen."},
+                ],
+            },
+            headers=headers,
+        )
+
+        body = response.json()
+        assert response.status_code == 200
+        assert [turn["role"] for turn in body["history"]] == [
+            "USER",
+            "ASSISTANT",
+            "USER",
+            "ASSISTANT",
+        ]
+
+    async def test_una_palanca_redonda_viaja_como_entero(
+        self, client: httpx.AsyncClient
+    ) -> None:
+        """Un slider en 25% serializa `25`, no `25.0`: JSON no distingue, y en modo estricto un
+        entero no es un float.
+        """
+
+        app.state.ai_lab_service = _service(
+            fmp_client=_FakeFMP(statements=_statements())
+        )
+        headers = await _auth(client, "ailab-int@example.com")
+
+        response = await client.post(
+            "/api/v1/ai-lab/simulate",
+            json={"ticker": "NVDA", "variables": {"revenue_growth_pct": 25}},
+            headers=headers,
+        )
+
+        body = response.json()
+        assert response.status_code == 200
+        assert body["applied_variables"]["revenue_growth_pct"] == 25.0
 
     async def test_una_variable_fuera_de_rango_es_422(
         self, client: httpx.AsyncClient

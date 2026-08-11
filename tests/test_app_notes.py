@@ -129,7 +129,9 @@ async def test_create_note_with_folder_and_ticker_normalizes_the_symbol(
     assert note["folder_id"] == folder["id"]
     assert note["ticker"] == "NVDA"
     assert note["pinned"] is True
-    assert note["content"].startswith("# Tesis")
+    content = note["content"]
+    assert isinstance(content, str)
+    assert content.startswith("# Tesis")
 
 
 async def test_create_note_in_unknown_or_foreign_folder_is_404(

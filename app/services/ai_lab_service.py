@@ -1370,8 +1370,12 @@ class AiLabService:
         # Dos TTL distintos porque los datos envejecen distinto: un estado contable publicado no
         # cambia hasta el próximo reporte (horas de caché no arriesgan nada) y la capitalización se
         # mueve con el precio durante la rueda.
-        self._statements_cache = TtlCache(ttl_seconds=statements_ttl_seconds)
-        self._metrics_cache = TtlCache(ttl_seconds=metrics_ttl_seconds)
+        self._statements_cache: TtlCache[FinancialStatements] = TtlCache(
+            ttl_seconds=statements_ttl_seconds
+        )
+        self._metrics_cache: TtlCache[FinancialMetrics] = TtlCache(
+            ttl_seconds=metrics_ttl_seconds
+        )
 
         self._analysis_prompt = analysis_prompt or _load_prompt(
             _ANALYSIS_PROMPT_PATH, _ANALYSIS_FALLBACK_PROMPT
@@ -2008,12 +2012,16 @@ def _extend_history(
     """
 
     turns = list(history)
-    if question:
-        turns.append(
-            ConversationTurn(
-                role=ConversationRole.USER, content=question[:MAX_TURN_CHARS]
-            )
-        )
+    if not question:
+        # La lectura general del diagnóstico NO es un turno de conversación: ya se devuelve en
+        # `narrative` y la pantalla la muestra como el informe del activo. Meterla en el hilo la
+        # mostraba dos veces —una como informe y otra como si el analista hubiera contestado algo—,
+        # y además viajaba de vuelta en el próximo request como una respuesta sin pregunta.
+        return turns[-MAX_HISTORY_TURNS:]
+
+    turns.append(
+        ConversationTurn(role=ConversationRole.USER, content=question[:MAX_TURN_CHARS])
+    )
     if narrative:
         turns.append(
             ConversationTurn(

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/ai_lab/presentation/ai_lab_screen.dart';
 import '../../features/alerts/presentation/alerts_screen.dart';
 import '../../features/asset_detail/presentation/asset_detail_screen.dart';
 import '../../features/auth/presentation/login_screen.dart';
@@ -76,6 +77,20 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                 : AssetType.stock,
           );
         },
+      ),
+      // El Laboratorio Financiero se navega con el símbolo en la ruta y NO es un destino del shell:
+      // siempre se abre sobre una empresa concreta (desde la ficha del activo o desde una búsqueda), y
+      // con cinco destinos la barra inferior de un teléfono ya está llena.
+      GoRoute(
+        path: '/ai-lab',
+        builder: (context, state) => const AiLabScreen(),
+        routes: [
+          GoRoute(
+            path: ':ticker',
+            builder: (context, state) =>
+                AiLabScreen(ticker: state.pathParameters['ticker']),
+          ),
+        ],
       ),
       GoRoute(
           path: '/alerts', builder: (context, state) => const AlertsScreen()),

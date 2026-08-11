@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_error.dart';
 import '../../../core/theme/app_theme.dart';
@@ -186,6 +187,7 @@ class _SheetHeader extends StatelessWidget {
             // que encenderlo acá lo deja encendido al saltar a otro activo: alguien que necesita
             // las explicaciones simples las necesita en todos los tickers.
             const BeginnerModeToggle(),
+            _SimulateScenariosAction(ticker: intelligence.ticker),
             _SaveToLabAction(intelligence: intelligence),
             if (intelligence.servedFromCache)
               Tooltip(
@@ -239,6 +241,27 @@ class _SheetHeader extends StatelessWidget {
 /// Lo que se pega es una transcripción del contenido que la Ficha ya está mostrando, compuesta en
 /// código: no se le pide al modelo un resumen del resumen, que sería una oportunidad más de inventar
 /// un número.
+/// "Simular escenarios de este activo".
+///
+/// Vive en la cabecera de la Ficha porque es ahí donde el usuario acaba de leer los fundamentales y se
+/// pregunta qué pasaría si alguno se moviera. Abre el Laboratorio Financiero con el símbolo ya puesto:
+/// hacerle buscar la empresa otra vez, después de haber estado leyéndola, rompe el hilo de la
+/// pregunta.
+class _SimulateScenariosAction extends StatelessWidget {
+  const _SimulateScenariosAction({required this.ticker});
+
+  final String ticker;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: const Icon(Icons.tune_outlined, size: 19),
+      tooltip: 'Simular escenarios de $ticker en el Laboratorio Financiero',
+      onPressed: () => context.push('/ai-lab/$ticker'),
+    );
+  }
+}
+
 class _SaveToLabAction extends ConsumerWidget {
   const _SaveToLabAction({required this.intelligence});
 

@@ -294,7 +294,10 @@ class ConversationTurn(BaseModel):
     expira una conversación que el usuario todavía puede tener abierta.
     """
 
-    model_config = ConfigDict(strict=True, extra="forbid")
+    # strict=False (default) deliberado, igual que el resto de los schemas de request: este modelo
+    # viaja DENTRO del cuerpo del pedido y JSON no tiene tipo nativo para Enum — `role` llega como
+    # string y necesita coerción.
+    model_config = ConfigDict(extra="forbid")
 
     role: ConversationRole
     content: str = Field(min_length=1, max_length=MAX_TURN_CHARS)
@@ -308,7 +311,9 @@ class FinancialAnalysisRequest(BaseModel):
     modo conversacional, y por eso el historial viaja acá.
     """
 
-    model_config = ConfigDict(strict=True, extra="forbid")
+    # strict=False (default) deliberado, igual que el resto de los schemas de request: valida JSON
+    # externo de un request HTTP, donde el período llega como string ("ANNUAL") y no como Enum.
+    model_config = ConfigDict(extra="forbid")
 
     ticker: str = Field(min_length=1, max_length=20)
     period: StatementPeriod = StatementPeriod.ANNUAL
@@ -383,7 +388,11 @@ class ScenarioVariables(BaseModel):
     significaría que el modelo elige un coeficiente, que es exactamente lo que este diseño evita.
     """
 
-    model_config = ConfigDict(strict=True, extra="forbid", allow_inf_nan=False)
+    # strict=False (default) deliberado, igual que el resto de los schemas de request: las palancas
+    # llegan en el cuerpo de un POST y un porcentaje redondo viaja como entero JSON (`25`, no `25.0`),
+    # que en modo estricto sería rechazado por no ser float. `allow_inf_nan=False` SÍ se mantiene:
+    # coerción de tipo es una cosa y aceptar NaN/infinito en una proyección es otra.
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     revenue_growth_pct: float | None = Field(default=None, ge=-100, le=500)
     ebitda_margin_pct: float | None = Field(default=None, ge=-100, le=100)
@@ -504,7 +513,9 @@ class SensitivityCase(BaseModel):
 
 
 class ScenarioSimulationRequest(BaseModel):
-    model_config = ConfigDict(strict=True, extra="forbid")
+    # strict=False (default) deliberado, igual que el resto de los schemas de request: valida JSON
+    # externo de un request HTTP, donde el período llega como string ("ANNUAL") y no como Enum.
+    model_config = ConfigDict(extra="forbid")
 
     ticker: str = Field(min_length=1, max_length=20)
     period: StatementPeriod = StatementPeriod.ANNUAL

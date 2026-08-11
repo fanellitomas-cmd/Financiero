@@ -9,14 +9,19 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any
+from typing import Generic, TypeVar
 
 # Tope de entradas por caché. Existe para que un patrón de claves que nunca se repiten (un ticker
 # distinto por consulta) no la convierta en una fuga de memoria.
 DEFAULT_MAX_ENTRIES = 128
 
 
-class TtlCache:
+# El valor es genérico para que el tipo del que guarda cada caché sobreviva al `get`: con `Any`,
+# devolver lo cacheado desde un método tipado silenciaba el chequeo justo en el camino más usado.
+T = TypeVar("T")
+
+
+class TtlCache(Generic[T]):
     """Caché por TTL con desalojo por orden de inserción.
 
     `time.monotonic` y no `datetime.now`: mide tiempo transcurrido, y un ajuste del reloj del sistema
@@ -32,10 +37,10 @@ class TtlCache:
     ) -> None:
         self._ttl = ttl_seconds
         self._max_entries = max_entries
-        self._entries: dict[str, tuple[float, Any]] = {}
+        self._entries: dict[str, tuple[float, T]] = {}
         self._locks: dict[str, asyncio.Lock] = {}
 
-    def get(self, key: str) -> Any | None:
+    def get(self, key: str) -> T | None:
         entry = self._entries.get(key)
         if entry is None:
             return None
@@ -45,7 +50,7 @@ class TtlCache:
             return None
         return value
 
-    def set(self, key: str, value: Any) -> None:
+    def set(self, key: str, value: T) -> None:
         if len(self._entries) >= self._max_entries:
             oldest = next(iter(self._entries))
             del self._entries[oldest]

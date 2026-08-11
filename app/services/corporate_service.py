@@ -588,10 +588,18 @@ class CorporateService:
         # Un TTL por vista, no uno global: un calendario de balances cambia de hora en hora y un
         # histórico de trimestres cerrados no cambia en meses. Un TTL único obligaría a elegir entre
         # gastar llamadas de más o servir datos viejos.
-        self._calendar_cache = TtlCache(ttl_seconds=calendar_ttl_seconds)
-        self._history_cache = TtlCache(ttl_seconds=history_ttl_seconds)
-        self._filings_cache = TtlCache(ttl_seconds=filings_ttl_seconds)
-        self._news_cache = TtlCache(ttl_seconds=news_ttl_seconds)
+        self._calendar_cache: TtlCache[list[EarningsEvent]] = TtlCache(
+            ttl_seconds=calendar_ttl_seconds
+        )
+        self._history_cache: TtlCache[EarningsHistory] = TtlCache(
+            ttl_seconds=history_ttl_seconds
+        )
+        self._filings_cache: TtlCache[list[SecFiling]] = TtlCache(
+            ttl_seconds=filings_ttl_seconds
+        )
+        self._news_cache: TtlCache[list[CorporateNewsItem]] = TtlCache(
+            ttl_seconds=news_ttl_seconds
+        )
 
     # --- Calendario de balances -------------------------------------------------------------
 

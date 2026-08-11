@@ -95,7 +95,9 @@ class OhlcBarOut(BaseModel):
     t: int
     o: float
     h: float
-    l: float
+    # `l` es el nombre del campo en el JSON que consume el gráfico, no una variable: renombrarlo
+    # rompería el contrato con el cliente, así que la regla se silencia acá y solo acá.
+    l: float  # noqa: E741
     c: float
     v: float
 

@@ -443,9 +443,10 @@ class NotesService:
 
         if folder_id is None:
             return None
-        return await session.scalar(
+        folder: Folder | None = await session.scalar(
             select(Folder).where(Folder.id == folder_id, Folder.user_id == user_id)
         )
+        return folder
 
     async def _load_note_or_raise(
         self, session: AsyncSession, user_id: UUID, note_id: UUID

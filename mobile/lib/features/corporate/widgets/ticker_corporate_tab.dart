@@ -34,7 +34,16 @@ class TickerCorporateTab extends ConsumerWidget {
         _SectionHeader(
           title: 'Próximo balance',
           icon: Icons.event_outlined,
-          action: _OpenHubButton(ticker: ticker),
+          action: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // El Laboratorio se ofrece desde acá porque la pregunta que sigue naturalmente a "¿qué
+              // se espera del balance?" es "¿y qué pasaría si sale distinto?".
+              _SimulateButton(ticker: ticker),
+              const SizedBox(width: 6),
+              _OpenHubButton(ticker: ticker),
+            ],
+          ),
         ),
         const SizedBox(height: 8),
         _NextEarnings(ticker: ticker),
@@ -88,6 +97,22 @@ class _OpenHubButton extends ConsumerWidget {
       },
       icon: const Icon(Icons.open_in_new, size: 14),
       label: const Text('Ver en el Hub', style: TextStyle(fontSize: 11)),
+    );
+  }
+}
+
+/// Atajo al simulador de escenarios con el símbolo ya puesto.
+class _SimulateButton extends StatelessWidget {
+  const _SimulateButton({required this.ticker});
+
+  final String ticker;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: () => context.push('/ai-lab/$ticker'),
+      icon: const Icon(Icons.tune_outlined, size: 14),
+      label: const Text('Simular', style: TextStyle(fontSize: 11)),
     );
   }
 }
