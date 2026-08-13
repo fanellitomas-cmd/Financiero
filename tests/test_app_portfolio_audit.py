@@ -39,9 +39,9 @@ from app.services.portfolio_audit_service import (
     PortfolioAuditService,
     build_concentration_risk,
     build_sector_allocation,
-    normalize_sector,
     pearson_correlation,
 )
+from app.services.portfolio_common import normalize_sector
 from app.services.ticker_catalog_service import TickerCatalogService
 from src.ingestion.fmp_client import FMPClient
 from src.ingestion.gemini_client import GeminiClient

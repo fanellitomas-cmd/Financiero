@@ -19,6 +19,7 @@ from app.services.ai_lab_service import AiLabService
 from app.services.corporate_service import CorporateService
 from app.services.financial_translator_service import FinancialTranslatorService
 from app.services.portfolio_audit_service import PortfolioAuditService
+from app.services.portfolio_builder_service import PortfolioBuilderService
 from app.services.ticker_intelligence_service import TickerIntelligenceService
 from app.services.ticker_search_service import TickerSearchService
 
@@ -87,6 +88,10 @@ async def client(
     app.state.ai_lab_service = AiLabService(
         analysis_prompt="Prompt de prueba.", scenario_prompt="Prompt de prueba."
     )
+    # Constructor de Portafolios sin proveedor de precios: las posiciones con `custom_price` se
+    # calculan enteras y las que dependen del mercado quedan sin unidades con su motivo. Los tests que
+    # quieran precios en vivo lo sobreescriben con sus dobles.
+    app.state.portfolio_builder_service = PortfolioBuilderService(db_session_factory)
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(

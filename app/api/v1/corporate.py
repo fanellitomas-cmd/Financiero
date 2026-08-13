@@ -33,7 +33,7 @@ from app.services.corporate_service import (
     default_calendar_range,
     normalize_for_matching,
 )
-from app.services.portfolio_audit_service import normalize_sector, provider_sector_keys
+from app.services.portfolio_common import normalize_sector, provider_sector_keys
 
 router = APIRouter(prefix="/corporate", tags=["corporate"])
 

@@ -33,6 +33,7 @@ from app.services.financial_translator_service import FinancialTranslatorService
 from app.services.market_data_service import MarketDataService
 from app.services.market_summary_service import MarketSummaryService
 from app.services.portfolio_audit_service import PortfolioAuditService
+from app.services.portfolio_builder_service import PortfolioBuilderService
 from app.services.push_service import PushNotificationService, TickerConnectionManager
 from app.services.scheduler import AgentScheduler
 from app.services.ticker_intelligence_service import TickerIntelligenceService
@@ -252,6 +253,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # es dato propio de la app. Sin FMP los sectores caen a "Sin clasificar", sin Polygon las
     # correlaciones caen a la heurística por sector, y sin Gemini no hay narrativa — cada ausencia
     # degrada su bloque y ninguna vacía la auditoría.
+    # El Constructor de Portafolios se instancia SIEMPRE, y acá el motivo es más fuerte que en los
+    # otros: su caso de uso central —simular con precios esperados— no necesita proveedor de precios
+    # en absoluto. Sin Polygon las posiciones con `custom_price` se calculan enteras y solo las que
+    # dependían del mercado quedan sin unidades; sin FMP los sectores caen a "Sin clasificar".
+    app.state.portfolio_builder_service = PortfolioBuilderService(
+        async_session_factory,
+        market_data_service=market_data_service,
+        fmp_client=fmp,
+    )
+
     app.state.portfolio_audit_service = PortfolioAuditService(
         async_session_factory,
         fmp_client=fmp,

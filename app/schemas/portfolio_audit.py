@@ -85,12 +85,17 @@ def sector_label(sector: PortfolioSector) -> str:
 class WeightingBasis(str, Enum):
     """Sobre qué se calcularon los porcentajes.
 
-    Hoy hay un único valor posible, y existe igual como campo del contrato: cuando el producto
-    guarde posiciones reales (cantidad y precio de compra) va a aparecer `MARKET_VALUE`, y un
-    cliente que ya lee este campo no va a tener que adivinar cuál de las dos cosas está mirando.
+    La Auditoría usa `EQUAL_WEIGHT_BY_COUNT` porque la watchlist no guarda cantidades: reparte por
+    cantidad de activos. El Constructor de Portafolios sí conoce el capital de cada posición y usa
+    `MARKET_VALUE`.
+
+    Que el campo exista en las dos respuestas es lo que evita el error de leer un 40% contra el otro:
+    "40% del capital" y "40% de los símbolos que sigo" son afirmaciones distintas sobre la misma
+    cartera, y sin este campo un cliente tendría que deducir cuál está mirando.
     """
 
     EQUAL_WEIGHT_BY_COUNT = "EQUAL_WEIGHT_BY_COUNT"
+    MARKET_VALUE = "MARKET_VALUE"
 
 
 class RiskLevel(str, Enum):

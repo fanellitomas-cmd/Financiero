@@ -24,6 +24,7 @@ from app.services.market_summary_service import MarketSummaryService
 from app.services.note_attachment_service import NoteAttachmentService
 from app.services.notes_service import NotesService
 from app.services.portfolio_audit_service import PortfolioAuditService
+from app.services.portfolio_builder_service import PortfolioBuilderService
 from app.services.ticker_catalog_service import TickerCatalogService
 from app.services.ticker_intelligence_service import TickerIntelligenceService
 from app.services.ticker_search_service import TickerSearchService
@@ -340,6 +341,29 @@ def get_ai_lab_service(request: Request) -> AiLabService:
 
 
 AiLabServiceDep = Annotated[AiLabService, Depends(get_ai_lab_service)]
+
+
+def get_portfolio_builder_service(request: Request) -> PortfolioBuilderService:
+    """El Constructor se instancia una vez en el lifespan, igual que la Auditoría, reutilizando los
+    mismos clientes de Polygon y FMP.
+
+    **Nunca 503 por falta de credenciales**, ni siquiera sin `POLYGON_API_KEY`: una cartera donde cada
+    posición trae su precio esperado se calcula entera sin proveedor, y ese es el caso de uso central
+    de la feature. Cada cliente ausente degrada su bloque y ninguno vacía la simulación.
+    """
+
+    service = getattr(request.app.state, "portfolio_builder_service", None)
+    if not isinstance(service, PortfolioBuilderService):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="El Constructor de Portafolios no está disponible en este momento.",
+        )
+    return service
+
+
+PortfolioBuilderServiceDep = Annotated[
+    PortfolioBuilderService, Depends(get_portfolio_builder_service)
+]
 
 
 def get_attachments_service(

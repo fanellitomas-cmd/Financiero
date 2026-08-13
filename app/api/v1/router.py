@@ -18,6 +18,7 @@ from app.api.v1 import (
     market,
     note_attachments,
     notes,
+    portfolio_builder,
     tickers,
     watchlist,
     watchlist_alerts,
@@ -40,6 +41,7 @@ api_v1_router.include_router(chat.router)
 api_v1_router.include_router(ai.router)
 api_v1_router.include_router(ai_lab.router)
 api_v1_router.include_router(corporate.router)
+api_v1_router.include_router(portfolio_builder.router)
 api_v1_router.include_router(market.router)
 api_v1_router.include_router(tickers.router)
 api_v1_router.include_router(folders.router)

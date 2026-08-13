@@ -54,6 +54,17 @@ from app.schemas.portfolio_audit import (
     SectorAllocation,
     sector_label,
 )
+from app.services.portfolio_common import (
+    REASON_NO_SECTOR_SOURCE,
+    REASON_PARTIAL_SECTORS,
+    RISK_HEADLINE_WORDS,
+    SECTOR_TRANSLATIONS,
+    herfindahl_index,
+    level_from_herfindahl,
+    level_from_top_weight,
+    resolve_sectors,
+    worst_risk_level,
+)
 from app.services.ticker_catalog_service import TickerCatalogService
 from src.ingestion.fmp_client import FMPClient
 from src.ingestion.gemini_client import GeminiClient
@@ -77,14 +88,10 @@ _REASON_SINGLE_POSITION = (
     "Con un solo activo no hay diversificación que auditar: toda la cartera está concentrada en "
     "él por definición."
 )
-_REASON_NO_SECTOR_SOURCE = (
-    "La clasificación por sector no está configurada en este entorno (falta FMP_API_KEY en .env) "
-    "y el catálogo local todavía no tiene el sector de estos símbolos."
-)
-_REASON_PARTIAL_SECTORS = (
-    "No se pudo determinar el sector de todos los activos; los que faltan figuran como "
-    "'Sin clasificar' y se cuentan aparte en la concentración."
-)
+# Los dos motivos de sector y la tabla de traducción viven en `portfolio_common`: los comparte el
+# Constructor de Portafolios, que tiene que clasificar exactamente igual.
+_REASON_NO_SECTOR_SOURCE = REASON_NO_SECTOR_SOURCE
+_REASON_PARTIAL_SECTORS = REASON_PARTIAL_SECTORS
 _REASON_NO_GEMINI = (
     "La narrativa con IA no está configurada en este entorno (falta GEMINI_API_KEY en .env); la "
     "distribución, la concentración y las advertencias son cálculos propios y son datos reales."
@@ -98,33 +105,9 @@ _REASON_GEMINI_INVALID = (
     "cálculos propios sobre tu watchlist."
 )
 
-# Vocabulario de FMP -> vocabulario del producto. Las claves se comparan en minúsculas y sin
-# espacios de sobra, así que `Financial Services` y `financial services` caen en el mismo lugar.
-#
-# Un sector que no esté en esta tabla NO se descarta ni se adivina: cae en `SIN_CLASIFICAR` y queda
-# visible en la auditoría, que es la señal de que hay que agregarlo acá.
-_SECTOR_TRANSLATIONS: dict[str, PortfolioSector] = {
-    "technology": PortfolioSector.TECNOLOGIA,
-    "information technology": PortfolioSector.TECNOLOGIA,
-    "healthcare": PortfolioSector.SALUD,
-    "health care": PortfolioSector.SALUD,
-    "financial services": PortfolioSector.SERVICIOS_FINANCIEROS,
-    "financials": PortfolioSector.SERVICIOS_FINANCIEROS,
-    "financial": PortfolioSector.SERVICIOS_FINANCIEROS,
-    "consumer cyclical": PortfolioSector.CONSUMO_DISCRECIONAL,
-    "consumer discretionary": PortfolioSector.CONSUMO_DISCRECIONAL,
-    "consumer defensive": PortfolioSector.CONSUMO_BASICO,
-    "consumer staples": PortfolioSector.CONSUMO_BASICO,
-    "industrials": PortfolioSector.INDUSTRIA,
-    "industrial goods": PortfolioSector.INDUSTRIA,
-    "energy": PortfolioSector.ENERGIA,
-    "basic materials": PortfolioSector.MATERIALES,
-    "materials": PortfolioSector.MATERIALES,
-    "utilities": PortfolioSector.SERVICIOS_PUBLICOS,
-    "real estate": PortfolioSector.BIENES_RAICES,
-    "communication services": PortfolioSector.COMUNICACIONES,
-    "telecommunication": PortfolioSector.COMUNICACIONES,
-}
+# La tabla de traducción vive en `portfolio_common` — la comparte el Constructor de Portafolios.
+# Se mantiene el nombre viejo como alias: es lo que importan los tests y `provider_sector_keys`.
+_SECTOR_TRANSLATIONS = SECTOR_TRANSLATIONS
 
 # Sectores que se ofrecen como contrapeso, en orden de preferencia. Los tres primeros son los
 # defensivos clásicos: históricamente son los que menos se mueven con el ciclo de las tecnológicas,
@@ -180,34 +163,6 @@ def _load_system_prompt() -> str:
         ) from exc
 
 
-def provider_sector_keys(sector: PortfolioSector) -> list[str]:
-    """Camino inverso de `normalize_sector`: qué nombres del proveedor caen en este sector del
-    producto, en minúsculas.
-
-    Lo usa la búsqueda en lenguaje natural para filtrar el catálogo, que guarda el sector CRUDO
-    (`Technology`), a partir de un criterio del producto (`TECNOLOGIA`). Se deriva de la misma
-    tabla que la traducción de ida, así que agregar un alias nuevo sirve para las dos direcciones
-    sin poder desincronizarlas.
-
-    Devuelve vacío para `CRIPTO` y `SIN_CLASIFICAR`: ninguno de los dos existe en el vocabulario
-    del proveedor de acciones — el primero se asigna por tipo de activo y el segundo es la
-    ausencia de sector.
-    """
-
-    return [raw for raw, mapped in _SECTOR_TRANSLATIONS.items() if mapped is sector]
-
-
-def normalize_sector(raw: str | None) -> PortfolioSector:
-    """Sector crudo del proveedor -> sector del producto. `None` y lo desconocido caen en
-    `SIN_CLASIFICAR`, nunca en un sector plausible: adivinarle el sector a un símbolo desconocido
-    contaminaría el cálculo de concentración con una afirmación inventada.
-    """
-
-    if raw is None:
-        return PortfolioSector.SIN_CLASIFICAR
-    return _SECTOR_TRANSLATIONS.get(raw.strip().lower(), PortfolioSector.SIN_CLASIFICAR)
-
-
 # --- Bloques determinísticos ----------------------------------------------------------------
 
 
@@ -244,39 +199,9 @@ def build_sector_allocation(
     return allocations
 
 
-def _level_from_top_weight(top_weight_pct: float) -> RiskLevel:
-    if top_weight_pct >= 70:
-        return RiskLevel.CRITICA
-    if top_weight_pct >= 50:
-        return RiskLevel.ALTA
-    if top_weight_pct >= 35:
-        return RiskLevel.MODERADA
-    return RiskLevel.BAJA
-
-
-def _level_from_herfindahl(index: float) -> RiskLevel:
-    if index >= 0.60:
-        return RiskLevel.CRITICA
-    if index >= 0.40:
-        return RiskLevel.ALTA
-    if index >= 0.25:
-        return RiskLevel.MODERADA
-    return RiskLevel.BAJA
-
-
-_RISK_ORDER: dict[RiskLevel, int] = {
-    RiskLevel.BAJA: 0,
-    RiskLevel.MODERADA: 1,
-    RiskLevel.ALTA: 2,
-    RiskLevel.CRITICA: 3,
-}
-
-_RISK_HEADLINE_WORDS: dict[RiskLevel, str] = {
-    RiskLevel.BAJA: "riesgo bajo",
-    RiskLevel.MODERADA: "riesgo moderado",
-    RiskLevel.ALTA: "riesgo alto",
-    RiskLevel.CRITICA: "riesgo muy alto",
-}
+# Los umbrales, el orden de severidad y las palabras del titular viven en `portfolio_common`: el
+# Constructor de Portafolios puntúa la misma concentración y no puede dar otro veredicto.
+_RISK_HEADLINE_WORDS = RISK_HEADLINE_WORDS
 
 
 def build_concentration_risk(
@@ -296,13 +221,11 @@ def build_concentration_risk(
         return None
 
     top = allocations[0]
-    weights = [allocation.weight_pct / 100 for allocation in allocations]
-    herfindahl = sum(weight * weight for weight in weights)
+    herfindahl = herfindahl_index([allocation.weight_pct for allocation in allocations])
 
-    level = max(
-        _level_from_top_weight(top.weight_pct),
-        _level_from_herfindahl(herfindahl),
-        key=lambda value: _RISK_ORDER[value],
+    level = worst_risk_level(
+        level_from_top_weight(top.weight_pct),
+        level_from_herfindahl(herfindahl),
     )
 
     notes: list[str] = []
@@ -576,81 +499,12 @@ class PortfolioAuditService:
     async def _resolve_sectors(
         self, holdings: list[tuple[str, AssetType]]
     ) -> tuple[dict[str, PortfolioSector], str | None]:
-        """Sector de cada activo, resuelto en tres pasos: cripto por tipo de activo, catálogo local,
-        y FMP para el resto (persistiendo lo que resuelva).
-
-        Devuelve también el motivo de degradación si algún símbolo quedó sin clasificar.
+        """Delega en `portfolio_common.resolve_sectors`: el Constructor de Portafolios clasifica con
+        el mismo camino de tres pasos, y dos implementaciones podrían dar sectores distintos para el
+        mismo símbolo.
         """
 
-        sectors: dict[str, PortfolioSector] = {}
-        pending: list[str] = []
-
-        for ticker, asset_type in holdings:
-            if asset_type == AssetType.CRYPTO:
-                # No se le pregunta a FMP: una cripto no tiene sector empresario, y el proveedor de
-                # fundamentales de acciones tampoco lo sabría.
-                sectors[ticker] = PortfolioSector.CRIPTO
-            else:
-                pending.append(ticker)
-
-        if pending:
-            from_catalog = await self._catalog.find_sectors(pending)
-            for ticker in list(pending):
-                raw = from_catalog.get(ticker)
-                if raw is not None:
-                    sectors[ticker] = normalize_sector(raw)
-                    pending.remove(ticker)
-
-        if pending and self._fmp is not None:
-            resolved = await self._fetch_sectors_from_provider(pending)
-            for ticker, raw in resolved.items():
-                sectors[ticker] = normalize_sector(raw)
-                pending.remove(ticker)
-            if resolved:
-                # Write-through al catálogo: el sector de un símbolo es el mismo para todos los
-                # usuarios y no cambia de un mes al otro.
-                await self._catalog.store_sectors(resolved)
-
-        for ticker in pending:
-            sectors[ticker] = PortfolioSector.SIN_CLASIFICAR
-
-        if not pending:
-            return sectors, None
-        if self._fmp is None and all(
-            sector == PortfolioSector.SIN_CLASIFICAR
-            for ticker, sector in sectors.items()
-            if ticker in pending
-        ):
-            return sectors, _REASON_NO_SECTOR_SOURCE
-        return sectors, _REASON_PARTIAL_SECTORS
-
-    async def _fetch_sectors_from_provider(self, tickers: list[str]) -> dict[str, str]:
-        """Consulta `/profile` de cada símbolo en paralelo. Un símbolo que falle o venga sin sector
-        no entra en el dict: queda pendiente y se declara `SIN_CLASIFICAR`, en vez de contaminar el
-        catálogo con un sector adivinado.
-        """
-
-        fmp = self._fmp
-        if fmp is None:
-            return {}
-
-        results = await asyncio.gather(
-            *(fmp.get_company_profile(ticker) for ticker in tickers),
-            return_exceptions=True,
-        )
-
-        resolved: dict[str, str] = {}
-        for ticker, result in zip(tickers, results, strict=True):
-            if isinstance(result, BaseException):
-                logger.warning(
-                    "portfolio_audit_profile_failed",
-                    extra={"ticker": ticker, "error": str(result)},
-                )
-                continue
-            if result is None or result.sector is None:
-                continue
-            resolved[ticker] = result.sector
-        return resolved
+        return await resolve_sectors(holdings, catalog=self._catalog, fmp=self._fmp)
 
     async def _correlation_warnings(
         self, sectors: dict[str, PortfolioSector]

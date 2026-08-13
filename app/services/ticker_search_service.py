@@ -47,7 +47,7 @@ from app.schemas.search import (
     SearchCriteria,
     TickerMatch,
 )
-from app.services.portfolio_audit_service import (
+from app.services.portfolio_common import (
     normalize_sector,
     provider_sector_keys,
 )
