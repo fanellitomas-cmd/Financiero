@@ -7,3 +7,8 @@ __pycache__/
 .env
 *.db
 *.db-journal
+
+# Grafo de conocimiento de graphify. NO se comitea: son 7,6 MB que cambian con cada commit de
+# codigo, y se regeneran en un minuto con `graphify update .` (extraccion local por AST, sin API
+# keys). Comitearlo metria un blob nuevo por push en el historial a cambio de nada.
+graphify-out/

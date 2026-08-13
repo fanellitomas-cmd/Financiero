@@ -1,0 +1,4 @@
+# El grafo se consulta con las herramientas de graphify (o su servidor MCP), no leyendo los
+# archivos: graph.json son 7,6 MB que cambian en cada rebuild, y tenerlo al alcance de una lectura
+# directa invalida el cache de prompt del asistente sin aportar nada que las consultas no den mejor.
+graphify-out/

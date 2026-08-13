@@ -209,3 +209,33 @@ Antes de considerar terminada cualquier tarea de código, verificar:
 - [ ] ¿La capa de Ingesta, Validación, Procesamiento y Notificación siguen sin mezclarse?
 - [ ] ¿Toda llamada de red nueva es async, tiene timeout explícito y no bloquea el event loop?
 - [ ] ¿Hay al menos un test para el caso feliz y un test para el caso de dato faltante/erróneo?
+
+## 7. GRAFO DE CONOCIMIENTO (graphify)
+
+El repo está indexado con [graphify](https://github.com/Graphify-Labs/graphify): un grafo de símbolos
+y relaciones (`calls`, `imports`, `uses`, `inherits`) sobre el código Python y Dart, que sirve para
+orientarse sin leer archivos enteros.
+
+**Requisito**: el grafo NO viaja en el repo (está en `.gitignore`, ver el motivo ahí). Cada quien lo
+genera localmente:
+
+```bash
+uv tool install "graphifyy[mcp]"   # el extra [mcp] NO es opcional acá: sin él graphify-mcp
+                                   # arranca y muere con ModuleNotFoundError: No module named 'mcp'
+graphify install                   # registra la skill /graphify en el asistente
+graphify update .                  # construye el grafo: extracción local por AST, sin API keys
+```
+
+`.mcp.json` ya declara el servidor MCP del grafo, así que un asistente que abra el proyecto lo
+levanta solo — pero falla si `graphify-mcp` no está en el PATH, o sea si no se corrió el install de
+arriba.
+
+**Cómo leerlo, y con qué desconfianza**: `graphify god-nodes` da los hubs y acierta (los primeros son
+`DataStatus` y `DataAvailability`, que es exactamente el contrato de degradación del proyecto).
+`graphify affected "X"` es preciso en profundidad 1, pero a profundidad 2 atribuye el `import` de un
+módulo a TODOS los símbolos de ese archivo, así que arrastra falsos positivos. Sirve para encontrar
+dónde mirar; el archivo sigue siendo la fuente de verdad, y ninguna afirmación sobre el código se
+cierra sin abrirlo.
+
+**Nunca** para datos financieros: el grafo describe el código, no los payloads de las APIs. La
+sección 1 (cero alucinación) no se relaja porque un grafo diga algo.
