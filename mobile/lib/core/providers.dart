@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/ai/data/financial_translator_repository.dart';
 import '../features/ai_lab/data/ai_lab_repository.dart';
+import '../features/portfolio_builder/data/portfolio_builder_repository.dart';
 import '../features/alerts/data/alerts_repository.dart';
 import '../features/asset_detail/data/asset_repository.dart';
 import '../features/asset_detail/data/deep_research_repository.dart';
@@ -158,6 +159,10 @@ final notesRepositoryProvider = Provider<NotesRepository>(
 /// Un repositorio para las dos vistas porque comparten el prefijo y el contrato de degradación. La
 /// separación que importa está en la presentación: el diagnóstico es una conversación con estado y la
 /// simulación se dispara con un botón.
+final portfolioBuilderRepositoryProvider = Provider<PortfolioBuilderRepository>(
+  (ref) => PortfolioBuilderRepository(ref.watch(apiClientProvider)),
+);
+
 final aiLabRepositoryProvider = Provider<AiLabRepository>(
   (ref) => AiLabRepository(ref.watch(apiClientProvider)),
 );

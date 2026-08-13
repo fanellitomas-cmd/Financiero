@@ -8,6 +8,7 @@ import '../../features/asset_detail/presentation/asset_detail_screen.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/chat/presentation/chat_screen.dart';
 import '../../features/corporate/presentation/corporate_hub_screen.dart';
+import '../../features/portfolio_builder/presentation/portfolio_builder_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/lab/presentation/investment_lab_screen.dart';
 import '../../features/watchlist/data/watchlist_models.dart';
@@ -81,6 +82,12 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // El Laboratorio Financiero se navega con el símbolo en la ruta y NO es un destino del shell:
       // siempre se abre sobre una empresa concreta (desde la ficha del activo o desde una búsqueda), y
       // con cinco destinos la barra inferior de un teléfono ya está llena.
+      // El Constructor tampoco es un destino del shell: se abre sobre una intención puntual ("quiero
+      // repartir esta plata") y con cinco destinos la barra de un teléfono ya está llena.
+      GoRoute(
+        path: '/portfolio-builder',
+        builder: (context, state) => const PortfolioBuilderScreen(),
+      ),
       GoRoute(
         path: '/ai-lab',
         builder: (context, state) => const AiLabScreen(),
