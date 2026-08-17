@@ -12,3 +12,7 @@ __pycache__/
 # codigo, y se regeneran en un minuto con `graphify update .` (extraccion local por AST, sin API
 # keys). Comitearlo metria un blob nuevo por push en el historial a cambio de nada.
 graphify-out/
+
+# Config local de Firebase: `firebase use --add` la genera y apunta al proyecto de cada uno.
+.firebaserc
+.firebase/

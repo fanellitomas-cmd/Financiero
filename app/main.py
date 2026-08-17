@@ -372,6 +372,11 @@ async def _validation_error_handler(request: Request, exc: Exception) -> JSONRes
 
 
 def create_app() -> FastAPI:
+    # Antes de armar nada: si el entorno dice `production`, todo lo que quedó en su default de
+    # desarrollo frena el arranque. Un despliegue que no levanta se nota; una base con el secreto del
+    # repo, no.
+    app_settings.assert_production_ready()
+
     application = FastAPI(
         title="Financiero API",
         description="Backend de la plataforma: autenticación, watchlists y disparo del motor de LangGraph.",

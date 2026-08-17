@@ -1,0 +1,17 @@
+# Todo lo que no necesita el backend para correr. La imagen se mantiene chica y, más importante, no
+# se filtran secretos ni la base de desarrollo dentro de una capa.
+.env
+*.db
+*.db-journal
+.git
+.github
+mobile/
+graphify-out/
+tests/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+__pycache__/
+*.pyc
+.venv/
+Spec.md

@@ -8,17 +8,33 @@ from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+DEFAULT_SECRET_PLACEHOLDER = "change-me-in-production"
+
+
 class AppSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # `production` activa las verificaciones de `assert_production_ready()`. No cambia ninguna otra
+    # conducta: la diferencia entre entornos es qué se exige, no qué se hace.
+    environment: str = "development"
 
     database_url: str = "sqlite+aiosqlite:///./financiero.db"
     database_echo: bool = False
 
-    jwt_secret_key: SecretStr = SecretStr("change-me-in-production")
+    jwt_secret_key: SecretStr = SecretStr(DEFAULT_SECRET_PLACEHOLDER)
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 60 * 24
 
-    internal_api_key: SecretStr = SecretStr("change-me-in-production")
+    internal_api_key: SecretStr = SecretStr(DEFAULT_SECRET_PLACEHOLDER)
+
+    # Código que hay que presentar para crear una cuenta. `None` deja el registro ABIERTO, que es lo
+    # que corresponde en desarrollo y lo que NO corresponde en una URL pública: sin código, cualquiera
+    # que encuentre el link se crea usuario y gasta las llamadas a los proveedores.
+    #
+    # Es un secreto compartido, no un sistema de invitaciones: no lleva registro de quién lo usó ni
+    # expira. Alcanza para "solo entra quien yo invité"; no alcanza para revocarle el acceso a una
+    # persona sin rotarlo para todas.
+    registration_invite_code: SecretStr | None = None
 
     default_alert_threshold_pct: str = "3.0"
 
@@ -104,6 +120,58 @@ class AppSettings(BaseSettings):
     # nunca llega a la ruta). "*" es el default de desarrollo; restringir a dominios concretos
     # en producción.
     cors_allowed_origins: list[str] = ["*"]
+
+    @property
+    def is_production(self) -> bool:
+        return self.environment.strip().lower() == "production"
+
+    def production_problems(self) -> list[str]:
+        """Qué falta para poder publicar esto, en una lista legible.
+
+        Se devuelve la lista COMPLETA en vez de fallar en el primer problema: quien está desplegando
+        quiere arreglar todo de una, no descubrir el siguiente error en el próximo intento.
+        """
+
+        problems: list[str] = []
+
+        if self.jwt_secret_key.get_secret_value() == DEFAULT_SECRET_PLACEHOLDER:
+            problems.append(
+                "JWT_SECRET_KEY sigue en el placeholder del repo: cualquiera que lea el código "
+                "podría firmar un token válido para cualquier cuenta. Generá uno con "
+                '`python -c "import secrets; print(secrets.token_urlsafe(48))"`.'
+            )
+        if self.internal_api_key.get_secret_value() == DEFAULT_SECRET_PLACEHOLDER:
+            problems.append(
+                "INTERNAL_API_KEY sigue en el placeholder del repo: protege los endpoints internos "
+                "del scheduler y con el default queda abierta."
+            )
+        if "*" in self.cors_allowed_origins:
+            problems.append(
+                "CORS_ALLOWED_ORIGINS acepta cualquier origen: un sitio ajeno podría llamar a la "
+                "API desde el navegador de un usuario logueado. Poné el dominio del frontend."
+            )
+        if self.database_url.startswith("sqlite"):
+            problems.append(
+                "DATABASE_URL apunta a SQLite. En Cloud Run el disco es efímero, así que cada "
+                "reinicio borraría usuarios y notas. Usá la URL de Cloud SQL (postgresql+asyncpg)."
+            )
+        return problems
+
+    def assert_production_ready(self) -> None:
+        """Frena el arranque si el entorno dice `production` y algo quedó en su default de desarrollo.
+
+        Es un fallo al ARRANCAR y no un warning a propósito: un warning en los logs de un despliegue
+        automático no lo lee nadie, y el costo de equivocarse acá es una base de datos abierta.
+        """
+
+        if not self.is_production:
+            return
+        problems = self.production_problems()
+        if problems:
+            listed = "\n  - ".join(problems)
+            raise RuntimeError(
+                f"ENVIRONMENT=production pero la configuración no está lista:\n  - {listed}"
+            )
 
 
 app_settings = AppSettings()
