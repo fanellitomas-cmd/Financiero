@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../auth/presentation/account_button.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -46,6 +47,10 @@ class DashboardScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Financiero'),
         actions: [
+          // El acceso a la cuenta va acá porque el shell no tiene un AppBar propio: en mobile esta
+          // es la única barra que ve todo el mundo al entrar. En escritorio, además, está al pie del
+          // rail de navegación.
+          const AccountButton(),
           // Búsqueda conversacional: es la entrada de exploración del catálogo, distinta del
           // buscador incremental del diálogo de alta (que sirve para agregar un símbolo que ya
           // sabés cuál es). Acá el usuario todavía no sabe qué busca.

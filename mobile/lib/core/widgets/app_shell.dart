@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/settings/presentation/exchange_onboarding_dialog.dart';
 import '../layout/breakpoints.dart';
 import '../providers.dart';
+import '../../features/auth/presentation/account_button.dart';
 import '../theme/app_theme.dart';
 
 /// Shell de las 3 pantallas principales (Dashboard/Chat/Watchlist), adaptativo: barra inferior
@@ -160,6 +161,16 @@ class _AppNavigationRail extends StatelessWidget {
       leading: const Padding(
         padding: EdgeInsets.symmetric(vertical: 20),
         child: Icon(Icons.candlestick_chart, size: 28),
+      ),
+      // Al pie del rail y separado de los destinos: no es un lugar al que se navega, es una acción.
+      trailing: const Expanded(
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: Padding(
+            padding: EdgeInsets.only(bottom: 16),
+            child: AccountButton(compact: true),
+          ),
+        ),
       ),
       destinations: [
         for (final destination in AppShell._destinations)

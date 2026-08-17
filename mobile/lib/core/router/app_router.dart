@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/ai_lab/presentation/ai_lab_screen.dart';
 import '../../features/alerts/presentation/alerts_screen.dart';
 import '../../features/asset_detail/presentation/asset_detail_screen.dart';
-import '../../features/auth/presentation/login_screen.dart';
+import '../../features/auth/presentation/auth_screen.dart';
 import '../../features/chat/presentation/chat_screen.dart';
 import '../../features/corporate/presentation/corporate_hub_screen.dart';
 import '../../features/portfolio_builder/presentation/portfolio_builder_screen.dart';
@@ -39,13 +39,17 @@ final goRouterProvider = Provider<GoRouter>((ref) {
     refreshListenable: refreshNotifier,
     redirect: (context, state) {
       final authState = ref.read(authControllerProvider);
-      final isLoggingIn = state.matchedLocation == '/login';
-      if (!authState.isAuthenticated && !isLoggingIn) return '/login';
-      if (authState.isAuthenticated && isLoggingIn) return '/dashboard';
+      // `/login` sigue resolviendo por compatibilidad con links viejos, pero la ruta canónica es
+      // `/auth`: la pantalla hace las dos cosas y llamarla "login" escondía el registro.
+      final onAuthRoute = state.matchedLocation == '/auth' ||
+          state.matchedLocation == '/login';
+      if (!authState.isAuthenticated && !onAuthRoute) return '/auth';
+      if (authState.isAuthenticated && onAuthRoute) return '/dashboard';
       return null;
     },
     routes: [
-      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      GoRoute(path: '/auth', builder: (context, state) => const AuthScreen()),
+      GoRoute(path: '/login', builder: (context, state) => const AuthScreen()),
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),
         routes: [

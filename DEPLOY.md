@@ -190,12 +190,16 @@ python -m scripts.sync_tickers
 ## Cómo entra el usuario
 
 1. Abre `https://PROJECT.web.app`.
-2. Cae en la pantalla de login → **Registrate**.
-3. Email, contraseña (mínimo 8) y el **código de invitación** del paso 2. Sin el código, 403 con el
-   motivo escrito.
+2. Cae en `/auth` → pestaña **Crear cuenta**.
+3. Email, contraseña (mínimo 8, validado en el cliente) y el **código de invitación** del paso 2. Sin
+   el código, el backend responde 403 y la pantalla muestra **su** mensaje, no una suposición.
+   La casilla "Recordar mi sesión" viene tildada; destildada, el token vive solo en memoria y al
+   cerrar la pestaña hay que entrar de nuevo.
 4. Adentro: Dashboard, Chat, Watchlist, Corporativo y Lab en la barra. El Laboratorio Financiero
    está en `/ai-lab` y el Constructor en `/portfolio-builder`; a los dos se llega desde la ficha de
    un activo.
+
+Para cerrar sesión: menú de cuenta en la barra del Dashboard, o al pie del rail en escritorio.
 
 Para dar de baja a alguien, hoy hay que borrar la fila de `users` a mano. Rotar el código de
 invitación **no** saca a quien ya entró.
