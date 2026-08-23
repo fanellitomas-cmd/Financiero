@@ -105,16 +105,16 @@ async def test_login_unknown_email_runs_dummy_bcrypt_check(
     están registrados. Se verifica el mecanismo (que la función se llama) y no el reloj, que sería
     inestable en CI."""
 
-    from app.api.v1 import auth as auth_module
+    from app.core.security import dummy_password_check as real_check
 
     calls: list[str] = []
-    real_check = auth_module.dummy_password_check
 
     def _spy(plain_password: str) -> None:
         calls.append(plain_password)
         real_check(plain_password)
 
-    monkeypatch.setattr(auth_module, "dummy_password_check", _spy)
+    # Se parchea el nombre tal como lo usa el módulo de auth (importado allí desde security).
+    monkeypatch.setattr("app.api.v1.auth.dummy_password_check", _spy)
 
     response = await client.post(
         "/api/v1/auth/login",
