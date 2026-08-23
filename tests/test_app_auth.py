@@ -5,6 +5,7 @@ protegidas por JWT (acá: `GET /watchlist`) rechacen tokens ausentes/inválidos.
 from __future__ import annotations
 
 import httpx
+import pytest
 
 
 async def test_register_creates_user(client: httpx.AsyncClient) -> None:
@@ -69,6 +70,59 @@ async def test_login_with_unknown_email_returns_401(client: httpx.AsyncClient) -
     )
 
     assert response.status_code == 401
+
+
+async def test_login_unknown_email_and_wrong_password_are_indistinguishable(
+    client: httpx.AsyncClient,
+) -> None:
+    """La respuesta a un email inexistente y a una contraseña incorrecta de un usuario real deben
+    ser idénticas —mismo status y mismo cuerpo— para no permitir enumerar cuentas."""
+
+    await client.post(
+        "/api/v1/auth/register",
+        json={"email": "existe@example.com", "password": "supersecreta1"},
+    )
+
+    wrong_password = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "existe@example.com", "password": "mala"},
+    )
+    unknown_email = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "no-existe@example.com", "password": "mala"},
+    )
+
+    assert wrong_password.status_code == unknown_email.status_code == 401
+    assert wrong_password.json() == unknown_email.json()
+
+
+async def test_login_unknown_email_runs_dummy_bcrypt_check(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """El login corre una verificación bcrypt señuelo cuando el email no existe. Es lo que iguala el
+    tiempo con el de una contraseña incorrecta; sin esto, la ausencia de bcrypt hace que la rama
+    'usuario no encontrado' vuelva mucho más rápido y el tiempo de respuesta delate qué emails
+    están registrados. Se verifica el mecanismo (que la función se llama) y no el reloj, que sería
+    inestable en CI."""
+
+    from app.api.v1 import auth as auth_module
+
+    calls: list[str] = []
+    real_check = auth_module.dummy_password_check
+
+    def _spy(plain_password: str) -> None:
+        calls.append(plain_password)
+        real_check(plain_password)
+
+    monkeypatch.setattr(auth_module, "dummy_password_check", _spy)
+
+    response = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "no-existe@example.com", "password": "cualquiera1"},
+    )
+
+    assert response.status_code == 401
+    assert calls == ["cualquiera1"]
 
 
 async def test_protected_route_without_token_returns_401(

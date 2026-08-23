@@ -40,6 +40,22 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return False
 
 
+# Hash "señuelo", con el mismo costo bcrypt que uno real, calculado una vez al importar el módulo.
+# El login lo usa cuando el email no existe: comparar la contraseña contra él quema el mismo tiempo
+# que verificar la de un usuario real. Sin esto, la rama "usuario no encontrado" vuelve sin correr
+# bcrypt (~2 ms) mientras que una contraseña incorrecta de un usuario que sí existe tarda ~270 ms, y
+# esa diferencia de tiempo enumera qué emails están registrados pese al mensaje 401 idéntico.
+_DECOY_PASSWORD_HASH = hash_password("igualar-el-tiempo-cuando-el-email-no-existe")
+
+
+def dummy_password_check(plain_password: str) -> None:
+    """Corre una verificación bcrypt y descarta el resultado, sólo para igualar el tiempo de la rama
+    'usuario no encontrado' con el de una contraseña incorrecta de un usuario real (anti-enumeración).
+    """
+
+    verify_password(plain_password, _DECOY_PASSWORD_HASH)
+
+
 def create_access_token(user_id: UUID) -> str:
     expires_at = datetime.now(timezone.utc) + timedelta(
         minutes=app_settings.jwt_access_token_expire_minutes

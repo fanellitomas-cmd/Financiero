@@ -9,7 +9,12 @@ import hmac
 
 from app.api.deps import DbSession
 from app.core.config import app_settings
-from app.core.security import create_access_token, hash_password, verify_password
+from app.core.security import (
+    create_access_token,
+    dummy_password_check,
+    hash_password,
+    verify_password,
+)
 from app.models.user import User
 from app.schemas.user import TokenResponse, UserCreate, UserLogin, UserRead
 
@@ -71,7 +76,13 @@ async def login(payload: UserLogin, session: DbSession) -> TokenResponse:
     )
 
     user = await session.scalar(select(User).where(User.email == payload.email))
-    if user is None or not verify_password(payload.password, user.hashed_password):
+    if user is None:
+        # Se corre una verificación bcrypt igual (contra un hash señuelo) aunque el email no exista:
+        # sin esto, esta rama vuelve en ~2 ms y la de una contraseña incorrecta en ~270 ms, y esa
+        # diferencia de tiempo enumera qué emails están registrados pese al 401 y el mensaje idéntico.
+        dummy_password_check(payload.password)
+        raise invalid_credentials
+    if not verify_password(payload.password, user.hashed_password):
         raise invalid_credentials
 
     return TokenResponse(access_token=create_access_token(user.id))
