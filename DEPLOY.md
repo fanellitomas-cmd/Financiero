@@ -34,9 +34,9 @@ sin poder llamar a la API:
 
 ## 1. Base de datos
 
-`db-f1-micro` es el instancia más chica y alcanza para una app de pocos usuarios. Junto con
-Memorystore (paso 1b) es uno de los dos componentes que **cobran estando idle** (~US$ 8–10 por mes
-la base); Cloud Run baja a cero y no cobra.
+`db-f1-micro` es el instancia más chica y alcanza para una app de pocos usuarios. Es el **único
+componente que cobra estando idle** en el despliegue mínimo (~US$ 8–10 por mes); Cloud Run baja a
+cero y no cobra. (Al escalar se suma Memorystore, paso 1b — opcional hasta entonces.)
 
 ```bash
 gcloud sql instances create financiero-db \
@@ -55,13 +55,22 @@ export SQL_CONN=$(gcloud sql instances describe financiero-db \
     --format='value(connectionName)')
 ```
 
-## 1b. Redis (Memorystore) — límite de intentos de login
+## 1b. (opcional hasta escalar) Redis — límite de intentos de login
 
-El backend limita los intentos de login para frenar la fuerza bruta, y el contador vive en Redis. **A
-escala no es opcional**: Cloud Run corre varias instancias, y sin un almacén compartido cada una
-contaría por su lado, dejando el login casi sin protección (un atacante obtendría N veces el límite).
-Por eso el arranque en `production` sin `REDIS_URL` se niega, igual que con la base o el secreto del
-JWT. Es el segundo componente que cobra estando idle (~US$ 25–35 por mes el tier más chico).
+El backend limita los intentos de login para frenar la fuerza bruta, y el contador puede vivir en dos
+lados:
+
+- **Lanzamiento a costo cero (recomendado para empezar):** el contador en memoria del proceso. **No
+  cuesta nada** y funciona bien con **una sola instancia** — ahí el conteo por proceso es el conteo
+  global. Se activa corriendo Cloud Run con `--max-instances=1` y poniendo
+  `LOGIN_RATE_LIMIT_ALLOW_IN_MEMORY=true` (paso 3). No hace falta nada de esta sección.
+- **Al escalar:** cuando subas `--max-instances` por encima de 1, cada instancia contaría por su lado
+  y el límite se afloja. Ahí el contador tiene que ser compartido → Redis (Memorystore). Es el
+  segundo componente que cobra estando idle (~US$ 25–35 por mes el tier más chico), así que tiene
+  sentido recién cuando el tráfico lo justifica.
+
+Cuando llegue ese momento, creá Memorystore y el conector de VPC (Cloud Run alcanza la IP privada de
+Redis sólo a través de él):
 
 ```bash
 gcloud services enable redis.googleapis.com vpcaccess.googleapis.com
@@ -71,15 +80,16 @@ gcloud redis instances create financiero-cache \
 
 export REDIS_HOST=$(gcloud redis instances describe financiero-cache \
     --region "$REGION" --format='value(host)')
-```
 
-Memorystore sólo es accesible por IP privada, así que Cloud Run la alcanza con un conector de VPC
-(el paso 3 lo referencia con `--vpc-connector`):
-
-```bash
 gcloud compute networks vpc-access connectors create financiero-conn \
     --region "$REGION" --range 10.8.0.0/28
 ```
+
+> **Por qué no Cloud Armor para esto.** Cloud Armor es rate-limiting por IP en el borde (anti-DDoS),
+> y no reemplaza el límite por cuenta: un ataque distribuido contra un solo email desde muchas IP se
+> le escapa. Además no es gratis — necesita un balanceador de carga externo adelante (que cobra por
+> hora estés o no usándolo) más el cargo por política. Sirve como capa extra a gran escala, no como
+> la protección de login ni como la opción barata.
 
 ## 2. Secretos
 
@@ -103,10 +113,10 @@ printf 'el-codigo-que-elijas' | \
 printf 'postgresql+asyncpg://financiero_app:PONE-UNA-LARGA@/financiero?host=/cloudsql/%s' "$SQL_CONN" | \
     gcloud secrets create database-url --data-file=-
 
-# La URL de Redis (Memorystore, paso 1b). No es un secreto en sentido estricto —es una IP privada—
-# pero se monta igual que los demás para no dispersar la config del servicio.
-printf 'redis://%s:6379' "$REDIS_HOST" | \
-    gcloud secrets create redis-url --data-file=-
+# SÓLO al escalar (paso 1b): la URL de Redis/Memorystore. En el lanzamiento a costo cero se saltea —
+# no hay instancia de Redis todavía. No es un secreto en sentido estricto —es una IP privada— pero se
+# monta igual que los demás para no dispersar la config del servicio.
+#   printf 'redis://%s:6379' "$REDIS_HOST" | gcloud secrets create redis-url --data-file=-
 
 # Las de los proveedores. Sin estas la app entra y funciona, pero degradada: cada pantalla que
 # depende de un proveedor muestra su aviso en vez de datos.
@@ -120,7 +130,8 @@ Dale acceso a la cuenta de servicio de Cloud Run:
 
 ```bash
 export SA="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')-compute@developer.gserviceaccount.com"
-for s in jwt-secret-key internal-api-key registration-invite-code database-url redis-url \
+# Al escalar, agregá `redis-url` a esta lista.
+for s in jwt-secret-key internal-api-key registration-invite-code database-url \
          polygon-api-key fmp-api-key tavily-api-key gemini-api-key; do
   gcloud secrets add-iam-policy-binding "$s" \
       --member="serviceAccount:$SA" --role=roles/secretmanager.secretAccessor
@@ -132,19 +143,27 @@ done
 `--allow-unauthenticated` es correcto acá: la autenticación es de la aplicación (JWT), no de IAM.
 Lo que queda público es el endpoint de login, igual que en cualquier API con usuarios.
 
+Lanzamiento a costo cero: **una sola instancia** (`--max-instances=1`) y el límite de login en
+memoria (`LOGIN_RATE_LIMIT_ALLOW_IN_MEMORY=true`). Con una instancia el conteo por proceso es global,
+así que el login queda igual de protegido y no se paga Redis.
+
 ```bash
 gcloud run deploy financiero-api \
     --source . \
     --region "$REGION" \
     --allow-unauthenticated \
+    --max-instances 1 \
     --add-cloudsql-instances "$SQL_CONN" \
-    --vpc-connector financiero-conn \
-    --set-env-vars 'ENVIRONMENT=production,SCHEDULER_ENABLED=false,CORS_ALLOWED_ORIGINS=["https://PLACEHOLDER"]' \
-    --set-secrets 'DATABASE_URL=database-url:latest,REDIS_URL=redis-url:latest,JWT_SECRET_KEY=jwt-secret-key:latest,INTERNAL_API_KEY=internal-api-key:latest,REGISTRATION_INVITE_CODE=registration-invite-code:latest,POLYGON_API_KEY=polygon-api-key:latest,FMP_API_KEY=fmp-api-key:latest,TAVILY_API_KEY=tavily-api-key:latest,GEMINI_API_KEY=gemini-api-key:latest'
+    --set-env-vars 'ENVIRONMENT=production,SCHEDULER_ENABLED=false,LOGIN_RATE_LIMIT_ALLOW_IN_MEMORY=true,CORS_ALLOWED_ORIGINS=["https://PLACEHOLDER"]' \
+    --set-secrets 'DATABASE_URL=database-url:latest,JWT_SECRET_KEY=jwt-secret-key:latest,INTERNAL_API_KEY=internal-api-key:latest,REGISTRATION_INVITE_CODE=registration-invite-code:latest,POLYGON_API_KEY=polygon-api-key:latest,FMP_API_KEY=fmp-api-key:latest,TAVILY_API_KEY=tavily-api-key:latest,GEMINI_API_KEY=gemini-api-key:latest'
 ```
 
-El `--vpc-connector` es lo que deja a Cloud Run alcanzar la IP privada de Memorystore (paso 1b). Sin
-él, el arranque en `production` se niega por `REDIS_URL` faltante o el servicio no puede conectar.
+> **Al escalar (más de una instancia):** montá Memorystore (paso 1b) y cambiá el deploy — sacá
+> `--max-instances 1` y `LOGIN_RATE_LIMIT_ALLOW_IN_MEMORY=true`, agregá `--vpc-connector financiero-conn`
+> y `REDIS_URL=redis-url:latest` a `--set-secrets`. Ojo: **es tu responsabilidad acordarte**. La app no
+> ve el `--max-instances`, así que mientras el flag esté en `true` arranca igual sin quejarse; si subís
+> las instancias y te olvidás de sacarlo, el límite de login se afloja en silencio (cada instancia
+> cuenta por su lado). Sacá el flag y ahí sí, sin `REDIS_URL`, el arranque en `production` se niega.
 
 **`SCHEDULER_ENABLED=false` no es opcional.** El scheduler interno de APScheduler asume un proceso
 que vive; Cloud Run apaga el contenedor cuando no hay tráfico y levanta varios cuando hay, así que

@@ -192,6 +192,22 @@ class TestProductionReadiness:
         assert len(problems) == 1
         assert "REDIS_URL" in problems[0]
 
+    def test_el_flag_de_memoria_permite_arrancar_sin_redis(self) -> None:
+        """Aceptando explícitamente el modo en memoria (para lanzar con una sola instancia a costo
+        cero), la falta de REDIS_URL deja de frenar el arranque."""
+
+        settings = AppSettings(
+            environment="production",
+            jwt_secret_key=SecretStr("un-secreto-de-verdad"),
+            internal_api_key=SecretStr("otro-secreto-de-verdad"),
+            cors_allowed_origins=["https://financiero.example"],
+            database_url="postgresql+asyncpg://user:pass@/db?host=/cloudsql/x",
+            login_rate_limit_allow_in_memory=True,
+        )
+
+        assert settings.production_problems() == []
+        settings.assert_production_ready()
+
     def test_una_configuracion_completa_pasa(self) -> None:
         settings = AppSettings(
             environment="production",

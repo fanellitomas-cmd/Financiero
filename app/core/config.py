@@ -37,10 +37,16 @@ class AppSettings(BaseSettings):
     registration_invite_code: SecretStr | None = None
 
     # Almacén compartido del límite de intentos de login (Redis/Memorystore). `None` cae al backend
-    # en memoria, que cuenta por proceso: alcanza en desarrollo, pero con varias instancias de Cloud
-    # Run cada una limitaría por su lado y un atacante obtendría N veces el límite. Por eso en
-    # `production` sin esto el arranque lo marca como problema (ver `production_problems`).
+    # en memoria, que cuenta por proceso: con varias instancias de Cloud Run cada una limitaría por su
+    # lado y un atacante obtendría N veces el límite. Por eso en `production` sin esto el arranque lo
+    # marca como problema — salvo que se acepte explícitamente el modo en memoria (ver el flag de abajo).
     redis_url: SecretStr | None = None
+
+    # Escotilla para el lanzamiento a costo cero: con `True`, `production` NO exige `REDIS_URL` y usa
+    # el limitador en memoria. Es seguro SÓLO con una única instancia (`--max-instances=1` en Cloud
+    # Run): ahí el conteo por proceso es el conteo global. Con más de una instancia el límite se
+    # afloja y hay que pasar a Redis. Default `False`: la config lista para escalar es la segura.
+    login_rate_limit_allow_in_memory: bool = False
 
     # Umbrales del límite de intentos de login, por ventana. El de email es el que protege una cuenta
     # concreta (fuerza bruta dirigida) y es ajustado; el de IP es holgado porque detrás de un NAT
@@ -168,12 +174,14 @@ class AppSettings(BaseSettings):
                 "DATABASE_URL apunta a SQLite. En Cloud Run el disco es efímero, así que cada "
                 "reinicio borraría usuarios y notas. Usá la URL de Cloud SQL (postgresql+asyncpg)."
             )
-        if self.redis_url is None:
+        if self.redis_url is None and not self.login_rate_limit_allow_in_memory:
             problems.append(
                 "REDIS_URL no está configurado: el límite de intentos de login caería al backend en "
                 "memoria, que cuenta por proceso. Con Cloud Run escalando a varias instancias eso deja "
                 "el login casi sin protección contra fuerza bruta (cada instancia limita por su lado). "
-                "Usá Memorystore (Redis) — ver DEPLOY.md."
+                "Para lanzar a costo cero, corré una sola instancia (--max-instances=1) y poné "
+                "LOGIN_RATE_LIMIT_ALLOW_IN_MEMORY=true para aceptarlo explícitamente. Al escalar, "
+                "usá Memorystore (Redis) — ver DEPLOY.md."
             )
         return problems
 
