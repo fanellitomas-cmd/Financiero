@@ -1,0 +1,7 @@
+# Lo escribe `graphify hook install` (ver scripts/setup_graphify.sh). Hoy no hace nada: el driver
+# resuelve conflictos en graph.json uniendo los dos lados, pero `graphify-out/` está en .gitignore,
+# así que ese archivo nunca entra en un merge. Está comiteado igual para que la línea no reaparezca
+# como cambio sin seguir cada vez que alguien corre el setup, y para que el día que el grafo sí se
+# versione la unión ya esté configurada. El driver en sí vive en la config local de git: sin correr
+# el setup, git ignora esta línea.
+graphify-out/graph.json merge=graphify

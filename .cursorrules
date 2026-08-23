@@ -223,12 +223,26 @@ genera localmente:
 uv tool install "graphifyy[mcp]"   # el extra [mcp] NO es opcional acá: sin él graphify-mcp
                                    # arranca y muere con ModuleNotFoundError: No module named 'mcp'
 graphify install                   # registra la skill /graphify en el asistente
-graphify update .                  # construye el grafo: extracción local por AST, sin API keys
+bash scripts/setup_graphify.sh     # construye el grafo e instala los hooks que lo mantienen
 ```
 
 `.mcp.json` ya declara el servidor MCP del grafo, así que un asistente que abra el proyecto lo
 levanta solo — pero falla si `graphify-mcp` no está en el PATH, o sea si no se corrió el install de
 arriba.
+
+**Se mantiene solo.** El setup instala un hook `post-commit` y uno `post-checkout` que reindexan lo
+que cambió; la reconstrucción corre desasociada del shell, así que `git commit` vuelve enseguida y el
+grafo queda listo unos segundos después (log en `~/.cache/graphify-rebuild.log`). Para saltearlo en
+un commit puntual: `GRAPHIFY_SKIP_HOOK=1 git commit …`.
+
+Correr el setup **no es opcional en un clon nuevo**: los hooks viven en `.git/hooks/`, que git no
+versiona, y un grafo sin hooks no avisa que se quedó viejo — sigue contestando, pero sobre el código
+de antes. Ante la duda, `graphify hook status` dice si están puestos.
+
+Lo que el hook **no** hace es renombrar comunidades: eso necesita un LLM (`graphify label`). Cuando
+el reindexado parte o junta comunidades, las nuevas quedan nombradas por su nodo hub en vez de por
+una etiqueta descriptiva. No afecta a las consultas de símbolos ni de relaciones, que es para lo que
+se usa el grafo acá.
 
 **Cómo leerlo, y con qué desconfianza**: `graphify god-nodes` da los hubs y acierta (los primeros son
 `DataStatus` y `DataAvailability`, que es exactamente el contrato de degradación del proyecto).
