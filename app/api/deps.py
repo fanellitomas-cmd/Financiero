@@ -12,6 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import app_settings
 from app.core.database import get_db, get_session_factory
+from app.core.rate_limit import (
+    LoginRateLimiter,
+    RateLimitConfig,
+    build_login_rate_limiter,
+)
 from app.core.security import decode_access_token
 from app.models.user import User
 from app.services.agent_runner_service import AgentRunnerService
@@ -66,6 +71,42 @@ async def verify_internal_api_key(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="API key interna inválida o ausente.",
         )
+
+
+def get_login_rate_limiter(request: Request) -> LoginRateLimiter:
+    """El limitador de login se arma una vez en el lifespan (`app/main.py`) y vive en `app.state`:
+    el backend Redis envuelve una conexión de larga vida que no debe recrearse por request.
+
+    Si faltara —un error de cableado— se cae a un limitador en memoria efímero en vez de romper el
+    login: quedarse sin poder autenticar por un problema del limitador sería peor que el ataque que
+    previene. El caso normal es que el lifespan siempre lo deja puesto.
+    """
+
+    limiter = getattr(request.app.state, "login_rate_limiter", None)
+    if not isinstance(limiter, LoginRateLimiter):
+        return build_login_rate_limiter(
+            redis_url=None,
+            config=RateLimitConfig(
+                max_email_attempts=app_settings.login_rate_limit_max_email_attempts,
+                max_ip_attempts=app_settings.login_rate_limit_max_ip_attempts,
+                window_seconds=app_settings.login_rate_limit_window_seconds,
+            ),
+        )
+    return limiter
+
+
+def client_ip(request: Request) -> str:
+    """IP del cliente para el límite por IP. Detrás de Cloud Run el `request.client` es el balanceador;
+    el cliente real es la primera entrada de `X-Forwarded-For`. Se toma esa, con el `request.client`
+    como respaldo. Es best-effort: el `X-Forwarded-For` es falsificable si la app quedara expuesta sin
+    el proxy delante, por eso la defensa que realmente protege una cuenta es el contador por email."""
+
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        first = forwarded.split(",")[0].strip()
+        if first:
+            return first
+    return request.client.host if request.client else "desconocida"
 
 
 def get_agent_runner_service(request: Request) -> AgentRunnerService:

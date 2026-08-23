@@ -34,8 +34,9 @@ sin poder llamar a la API:
 
 ## 1. Base de datos
 
-`db-f1-micro` es el instancia más chica y alcanza para una app de pocos usuarios. **Es el único
-componente que cobra estando idle** (~US$ 8–10 por mes); Cloud Run baja a cero y no cobra.
+`db-f1-micro` es el instancia más chica y alcanza para una app de pocos usuarios. Junto con
+Memorystore (paso 1b) es uno de los dos componentes que **cobran estando idle** (~US$ 8–10 por mes
+la base); Cloud Run baja a cero y no cobra.
 
 ```bash
 gcloud sql instances create financiero-db \
@@ -52,6 +53,32 @@ El nombre de conexión (`PROYECTO:REGION:INSTANCIA`) se usa en el paso 3:
 ```bash
 export SQL_CONN=$(gcloud sql instances describe financiero-db \
     --format='value(connectionName)')
+```
+
+## 1b. Redis (Memorystore) — límite de intentos de login
+
+El backend limita los intentos de login para frenar la fuerza bruta, y el contador vive en Redis. **A
+escala no es opcional**: Cloud Run corre varias instancias, y sin un almacén compartido cada una
+contaría por su lado, dejando el login casi sin protección (un atacante obtendría N veces el límite).
+Por eso el arranque en `production` sin `REDIS_URL` se niega, igual que con la base o el secreto del
+JWT. Es el segundo componente que cobra estando idle (~US$ 25–35 por mes el tier más chico).
+
+```bash
+gcloud services enable redis.googleapis.com vpcaccess.googleapis.com
+
+gcloud redis instances create financiero-cache \
+    --region "$REGION" --tier=basic --size=1 --redis-version=redis_7_0
+
+export REDIS_HOST=$(gcloud redis instances describe financiero-cache \
+    --region "$REGION" --format='value(host)')
+```
+
+Memorystore sólo es accesible por IP privada, así que Cloud Run la alcanza con un conector de VPC
+(el paso 3 lo referencia con `--vpc-connector`):
+
+```bash
+gcloud compute networks vpc-access connectors create financiero-conn \
+    --region "$REGION" --range 10.8.0.0/28
 ```
 
 ## 2. Secretos
@@ -76,6 +103,11 @@ printf 'el-codigo-que-elijas' | \
 printf 'postgresql+asyncpg://financiero_app:PONE-UNA-LARGA@/financiero?host=/cloudsql/%s' "$SQL_CONN" | \
     gcloud secrets create database-url --data-file=-
 
+# La URL de Redis (Memorystore, paso 1b). No es un secreto en sentido estricto —es una IP privada—
+# pero se monta igual que los demás para no dispersar la config del servicio.
+printf 'redis://%s:6379' "$REDIS_HOST" | \
+    gcloud secrets create redis-url --data-file=-
+
 # Las de los proveedores. Sin estas la app entra y funciona, pero degradada: cada pantalla que
 # depende de un proveedor muestra su aviso en vez de datos.
 printf 'tu-key' | gcloud secrets create polygon-api-key --data-file=-
@@ -88,7 +120,7 @@ Dale acceso a la cuenta de servicio de Cloud Run:
 
 ```bash
 export SA="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')-compute@developer.gserviceaccount.com"
-for s in jwt-secret-key internal-api-key registration-invite-code database-url \
+for s in jwt-secret-key internal-api-key registration-invite-code database-url redis-url \
          polygon-api-key fmp-api-key tavily-api-key gemini-api-key; do
   gcloud secrets add-iam-policy-binding "$s" \
       --member="serviceAccount:$SA" --role=roles/secretmanager.secretAccessor
@@ -106,9 +138,13 @@ gcloud run deploy financiero-api \
     --region "$REGION" \
     --allow-unauthenticated \
     --add-cloudsql-instances "$SQL_CONN" \
+    --vpc-connector financiero-conn \
     --set-env-vars 'ENVIRONMENT=production,SCHEDULER_ENABLED=false,CORS_ALLOWED_ORIGINS=["https://PLACEHOLDER"]' \
-    --set-secrets 'DATABASE_URL=database-url:latest,JWT_SECRET_KEY=jwt-secret-key:latest,INTERNAL_API_KEY=internal-api-key:latest,REGISTRATION_INVITE_CODE=registration-invite-code:latest,POLYGON_API_KEY=polygon-api-key:latest,FMP_API_KEY=fmp-api-key:latest,TAVILY_API_KEY=tavily-api-key:latest,GEMINI_API_KEY=gemini-api-key:latest'
+    --set-secrets 'DATABASE_URL=database-url:latest,REDIS_URL=redis-url:latest,JWT_SECRET_KEY=jwt-secret-key:latest,INTERNAL_API_KEY=internal-api-key:latest,REGISTRATION_INVITE_CODE=registration-invite-code:latest,POLYGON_API_KEY=polygon-api-key:latest,FMP_API_KEY=fmp-api-key:latest,TAVILY_API_KEY=tavily-api-key:latest,GEMINI_API_KEY=gemini-api-key:latest'
 ```
+
+El `--vpc-connector` es lo que deja a Cloud Run alcanzar la IP privada de Memorystore (paso 1b). Sin
+él, el arranque en `production` se niega por `REDIS_URL` faltante o el servicio no puede conectar.
 
 **`SCHEDULER_ENABLED=false` no es opcional.** El scheduler interno de APScheduler asume un proceso
 que vive; Cloud Run apaga el contenedor cuando no hay tráfico y levanta varios cuando hay, así que

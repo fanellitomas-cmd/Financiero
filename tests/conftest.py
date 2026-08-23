@@ -13,7 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import StaticPool
 
 from app import models as _models  # noqa: F401  registra las tablas en Base.metadata
+from app.core.config import app_settings
 from app.core.database import Base, get_db, get_session_factory
+from app.core.rate_limit import InMemoryLoginRateLimiter, RateLimitConfig
 from app.main import app
 from app.services.ai_lab_service import AiLabService
 from app.services.corporate_service import CorporateService
@@ -92,6 +94,15 @@ async def client(
     # calculan enteras y las que dependen del mercado quedan sin unidades con su motivo. Los tests que
     # quieran precios en vivo lo sobreescriben con sus dobles.
     app.state.portfolio_builder_service = PortfolioBuilderService(db_session_factory)
+    # Limitador de login fresco por test (backend en memoria), para que el conteo de intentos no se
+    # arrastre entre tests. Umbrales por defecto de los settings.
+    app.state.login_rate_limiter = InMemoryLoginRateLimiter(
+        RateLimitConfig(
+            max_email_attempts=app_settings.login_rate_limit_max_email_attempts,
+            max_ip_attempts=app_settings.login_rate_limit_max_ip_attempts,
+            window_seconds=app_settings.login_rate_limit_window_seconds,
+        )
+    )
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(

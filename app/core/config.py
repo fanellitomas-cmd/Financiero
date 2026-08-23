@@ -36,6 +36,19 @@ class AppSettings(BaseSettings):
     # persona sin rotarlo para todas.
     registration_invite_code: SecretStr | None = None
 
+    # Almacén compartido del límite de intentos de login (Redis/Memorystore). `None` cae al backend
+    # en memoria, que cuenta por proceso: alcanza en desarrollo, pero con varias instancias de Cloud
+    # Run cada una limitaría por su lado y un atacante obtendría N veces el límite. Por eso en
+    # `production` sin esto el arranque lo marca como problema (ver `production_problems`).
+    redis_url: SecretStr | None = None
+
+    # Umbrales del límite de intentos de login, por ventana. El de email es el que protege una cuenta
+    # concreta (fuerza bruta dirigida) y es ajustado; el de IP es holgado porque detrás de un NAT
+    # muchos usuarios legítimos comparten IP. Sólo se cuentan los intentos fallidos.
+    login_rate_limit_max_email_attempts: int = 5
+    login_rate_limit_max_ip_attempts: int = 50
+    login_rate_limit_window_seconds: int = 900
+
     default_alert_threshold_pct: str = "3.0"
 
     scheduler_enabled: bool = True
@@ -154,6 +167,13 @@ class AppSettings(BaseSettings):
             problems.append(
                 "DATABASE_URL apunta a SQLite. En Cloud Run el disco es efímero, así que cada "
                 "reinicio borraría usuarios y notas. Usá la URL de Cloud SQL (postgresql+asyncpg)."
+            )
+        if self.redis_url is None:
+            problems.append(
+                "REDIS_URL no está configurado: el límite de intentos de login caería al backend en "
+                "memoria, que cuenta por proceso. Con Cloud Run escalando a varias instancias eso deja "
+                "el login casi sin protección contra fuerza bruta (cada instancia limita por su lado). "
+                "Usá Memorystore (Redis) — ver DEPLOY.md."
             )
         return problems
 

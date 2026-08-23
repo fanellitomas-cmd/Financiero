@@ -7,3 +7,10 @@ testpaths = ["tests"]
 # problema de nuestro código, así que se ignora puntualmente acá en vez de bajar --strict.
 module = "apscheduler.*"
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# redis se importa de forma perezosa sólo cuando hay REDIS_URL, y su cliente se consume detrás del
+# Protocol `AsyncRedisClient` (app/core/rate_limit.py), así que nuestro código queda tipado igual.
+# El import concreto se ignora acá — puntual, sin bajar --strict.
+module = "redis.*"
+ignore_missing_imports = true

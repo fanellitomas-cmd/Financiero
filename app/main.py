@@ -24,6 +24,7 @@ from fastapi.responses import JSONResponse
 from app import models as _models  # noqa: F401  registra las tablas en Base.metadata
 from app.api.v1.router import api_v1_router
 from app.core.config import app_settings
+from app.core.rate_limit import RateLimitConfig, build_login_rate_limiter
 from app.core.database import async_session_factory, create_all_tables, engine
 from app.services.agent_runner_service import AgentRunnerService
 from app.services.ai_lab_service import AiLabService
@@ -325,11 +326,26 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         scheduler.start()
     app.state.scheduler = scheduler
 
+    # Límite de intentos de login. Con REDIS_URL usa Redis (compartido entre instancias); sin él, cae
+    # al backend en memoria — que en producción el arranque ya marcó como problema.
+    login_rate_limiter = build_login_rate_limiter(
+        redis_url=(
+            app_settings.redis_url.get_secret_value() if app_settings.redis_url else None
+        ),
+        config=RateLimitConfig(
+            max_email_attempts=app_settings.login_rate_limit_max_email_attempts,
+            max_ip_attempts=app_settings.login_rate_limit_max_ip_attempts,
+            window_seconds=app_settings.login_rate_limit_window_seconds,
+        ),
+    )
+    app.state.login_rate_limiter = login_rate_limiter
+
     try:
         yield
     finally:
         if scheduler is not None:
             scheduler.shutdown()
+        await login_rate_limiter.aclose()
         for client in ingestion_clients:
             await client.aclose()
         if fcm_client is not None:

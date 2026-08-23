@@ -164,6 +164,7 @@ class TestProductionReadiness:
         assert "INTERNAL_API_KEY" in joined
         assert "CORS_ALLOWED_ORIGINS" in joined
         assert "DATABASE_URL" in joined
+        assert "REDIS_URL" in joined
 
     def test_sqlite_se_señala_porque_cloud_run_borra_el_disco(self) -> None:
         settings = AppSettings(
@@ -171,11 +172,25 @@ class TestProductionReadiness:
             jwt_secret_key=SecretStr("un-secreto-de-verdad"),
             internal_api_key=SecretStr("otro-secreto-de-verdad"),
             cors_allowed_origins=["https://financiero.example"],
+            redis_url=SecretStr("redis://10.0.0.3:6379"),
         )
 
         problems = settings.production_problems()
         assert len(problems) == 1
         assert "SQLite" in problems[0]
+
+    def test_sin_redis_el_login_queda_casi_sin_proteccion_a_escala(self) -> None:
+        settings = AppSettings(
+            environment="production",
+            jwt_secret_key=SecretStr("un-secreto-de-verdad"),
+            internal_api_key=SecretStr("otro-secreto-de-verdad"),
+            cors_allowed_origins=["https://financiero.example"],
+            database_url="postgresql+asyncpg://user:pass@/db?host=/cloudsql/x",
+        )
+
+        problems = settings.production_problems()
+        assert len(problems) == 1
+        assert "REDIS_URL" in problems[0]
 
     def test_una_configuracion_completa_pasa(self) -> None:
         settings = AppSettings(
@@ -184,6 +199,7 @@ class TestProductionReadiness:
             internal_api_key=SecretStr("otro-secreto-de-verdad"),
             cors_allowed_origins=["https://financiero.example"],
             database_url="postgresql+asyncpg://user:pass@/db?host=/cloudsql/x",
+            redis_url=SecretStr("redis://10.0.0.3:6379"),
         )
 
         assert settings.production_problems() == []

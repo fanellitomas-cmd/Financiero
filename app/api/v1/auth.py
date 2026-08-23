@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, status
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 
 import hmac
 
-from app.api.deps import DbSession
+from app.api.deps import DbSession, client_ip, get_login_rate_limiter
 from app.core.config import app_settings
+from app.core.rate_limit import LoginRateLimiter
 from app.core.security import (
     create_access_token,
     dummy_password_check,
@@ -70,10 +73,26 @@ async def register(payload: UserCreate, session: DbSession) -> User:
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(payload: UserLogin, session: DbSession) -> TokenResponse:
+async def login(
+    payload: UserLogin,
+    request: Request,
+    session: DbSession,
+    rate_limiter: Annotated[LoginRateLimiter, Depends(get_login_rate_limiter)],
+) -> TokenResponse:
     invalid_credentials = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED, detail="Email o contraseña inválidos."
     )
+
+    ip = client_ip(request)
+    # El límite se chequea ANTES de tocar la base o correr bcrypt: un atacante frenado no debe poder
+    # ni siquiera gastarnos un hash por intento.
+    decision = await rate_limiter.check(payload.email, ip)
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Demasiados intentos de inicio de sesión. Probá de nuevo en un rato.",
+            headers={"Retry-After": str(decision.retry_after_seconds)},
+        )
 
     user = await session.scalar(select(User).where(User.email == payload.email))
     if user is None:
@@ -81,8 +100,13 @@ async def login(payload: UserLogin, session: DbSession) -> TokenResponse:
         # sin esto, esta rama vuelve en ~2 ms y la de una contraseña incorrecta en ~270 ms, y esa
         # diferencia de tiempo enumera qué emails están registrados pese al 401 y el mensaje idéntico.
         dummy_password_check(payload.password)
+        await rate_limiter.record_failure(payload.email, ip)
         raise invalid_credentials
     if not verify_password(payload.password, user.hashed_password):
+        await rate_limiter.record_failure(payload.email, ip)
         raise invalid_credentials
 
+    # Un login exitoso limpia el contador del email: quien se equivocó una vez y entró no arrastra
+    # el fallo hacia el próximo intento.
+    await rate_limiter.record_success(payload.email, ip)
     return TokenResponse(access_token=create_access_token(user.id))
