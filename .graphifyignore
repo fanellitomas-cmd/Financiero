@@ -1,0 +1,4 @@
+# Skills de seguridad de terceros (.claude/skills/, ver su README): son herramientas de testing,
+# no arquitectura de esta app. Fuera del grafo para no mezclar ~2500 lineas de scripts ajenos con
+# el mapa del codigo propio. graphify honra este archivo (no .claudeignore, que es de Claude Code).
+.claude/skills/
